@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { Plus, Download, Search, Pencil, Trash2, Camera, X } from "lucide-react";
 import { useStore, getStockStatus, getCatEmoji, Material } from "@/store/useStore";
@@ -15,7 +15,7 @@ const empty = (): Omit<Material,"id"|"fechaCreacion"> => ({
   stock:0, stockMin:5, ubicacion:"", proveedor:"", desc:"", fotos:[],
 });
 
-export default function InventarioPage() {
+function InventarioContent() {
   const { inventory, addMaterial, updateMaterial, deleteMaterial } = useStore();
   const { toast } = useToast();
   const params = useSearchParams();
@@ -254,5 +254,13 @@ export default function InventarioPage() {
         </div>
       </Modal>
     </div>
+  );
+}
+
+export default function InventarioPage() {
+  return (
+    <Suspense fallback={null}>
+      <InventarioContent />
+    </Suspense>
   );
 }
