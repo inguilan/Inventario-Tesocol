@@ -55,7 +55,7 @@ export default function ProyectosPage() {
     try {
       valid.forEach((r) => {
         const item = inventory.find((i)=>i.id===r.itemId)!;
-        addDispatch({ projectId:selected!, projectNombre:project!.nombre, itemId:r.itemId, itemNombre:item.nombre, itemRef:item.ref, unidad:item.unidad, qty:r.qty, responsable:r.resp, obs:r.obs });
+        addDispatch({ projectId:selected!, projectNombre:project!.nombre, itemId:r.itemId, itemNombre:item.nombre, itemRef:item.ref, unidad:item.unidad, qty:r.qty, responsable:r.resp, obs:r.obs, tipo:"despacho" });
       });
       toast("Despacho registrado","success");
       setDispatch(false);
