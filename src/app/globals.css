@@ -94,6 +94,38 @@ input:focus, select:focus, textarea:focus {
 .animate-slide  { animation: slideInRight .3s ease; }
 .animate-fadein { animation: fadeIn .3s ease both; }
 
+/* ── Responsive Layout ────────────────────────────────────────── */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(4px);
+  z-index: 99;
+}
+.main-content {
+  margin-left: 240px;
+  flex: 1;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  transition: margin-left 0.25s ease;
+}
+@media (max-width: 768px) {
+  .sidebar-desktop { transform: translateX(-100%); }
+  .sidebar-desktop.sidebar-open { transform: translateX(0); }
+  .sidebar-overlay.sidebar-open { display: block; }
+  .main-content { margin-left: 0 !important; }
+  .topbar-search { display: none !important; }
+  .topbar-username { display: none !important; }
+  .main-padding { padding: 16px !important; }
+}
+@media (min-width: 769px) {
+  .sidebar-desktop { transform: translateX(0) !important; }
+  .hamburger-btn { display: none !important; }
+}
+
+/* ── Table responsive ─────────────────────────────────────────── */
 /* Table */
 .tbl th {
   text-align: left;

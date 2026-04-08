@@ -12,15 +12,19 @@ const NAV = [
   { href: "/exportar",    label: "Exportar Excel",   icon: Download },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => void }) {
   const path = usePathname();
 
   return (
-    <aside style={{
-      position: "fixed", left: 0, top: 0, bottom: 0, width: 240,
-      background: "var(--bg2)", borderRight: "1px solid var(--border)",
-      display: "flex", flexDirection: "column", zIndex: 100,
-    }}>
+    <aside
+      className={`sidebar-desktop ${isOpen ? "sidebar-open" : ""}`}
+      style={{
+        position: "fixed", left: 0, top: 0, bottom: 0, width: 240,
+        background: "var(--bg2)", borderRight: "1px solid var(--border)",
+        display: "flex", flexDirection: "column", zIndex: 100,
+        transition: "transform 0.25s ease",
+      }}
+    >
       {/* Logo */}
       <div style={{ padding: "22px 20px 18px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 12 }}>
         <div style={{ width: 38, height: 38, background: "linear-gradient(135deg,var(--orange-dark),var(--orange))", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: "0 4px 14px rgba(245,98,15,0.35)" }}>
@@ -44,7 +48,7 @@ export default function Sidebar() {
                   {item.section}
                 </div>
               )}
-              <Link href={item.href} style={{ textDecoration: "none" }}>
+              <Link href={item.href} style={{ textDecoration: "none" }} onClick={onClose}>
                 <div style={{
                   display: "flex", alignItems: "center", gap: 10, padding: "9px 12px",
                   borderRadius: 8, cursor: "pointer", marginBottom: 2, transition: "all .15s",

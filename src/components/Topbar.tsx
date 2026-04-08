@@ -1,15 +1,16 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { Search, LogOut, Bell } from "lucide-react";
+import { Search, LogOut, Bell, Menu } from "lucide-react";
 import { useState } from "react";
 import { useStore } from "@/store/useStore";
 
 interface TopbarProps {
   user?: { name?: string | null; email?: string | null };
+  onMenuClick?: () => void;
 }
 
-export default function Topbar({ user }: TopbarProps) {
+export default function Topbar({ user, onMenuClick }: TopbarProps) {
   const router = useRouter();
   const [q, setQ] = useState("");
   const inventory = useStore((s) => s.inventory);
@@ -31,11 +32,20 @@ export default function Topbar({ user }: TopbarProps) {
       position: "sticky", top: 0, zIndex: 50,
       background: "rgba(13,13,13,0.88)", backdropFilter: "blur(20px)",
       borderBottom: "1px solid var(--border)",
-      padding: "0 28px", height: 60,
-      display: "flex", alignItems: "center", gap: 16,
+      padding: "0 16px", height: 60,
+      display: "flex", alignItems: "center", gap: 12,
     }}>
-      {/* Search */}
-      <form onSubmit={handleSearch} style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--bg3)", border: "1px solid var(--border)", borderRadius: 8, padding: "7px 14px", width: 280, transition: "all .2s" }}>
+      {/* Hamburger — solo móvil */}
+      <button
+        className="hamburger-btn"
+        onClick={onMenuClick}
+        style={{ width: 36, height: 36, borderRadius: 8, background: "var(--bg3)", border: "1px solid var(--border)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text2)", flexShrink: 0 }}
+      >
+        <Menu size={18} />
+      </button>
+
+      {/* Search — oculto en móvil */}
+      <form className="topbar-search" onSubmit={handleSearch} style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--bg3)", border: "1px solid var(--border)", borderRadius: 8, padding: "7px 14px", width: 280, transition: "all .2s" }}>
         <Search size={15} color="var(--text3)" />
         <input
           value={q}
@@ -59,11 +69,11 @@ export default function Topbar({ user }: TopbarProps) {
         </div>
 
         {/* User */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 14px", borderRadius: 8, background: "var(--bg3)", border: "1px solid var(--border)" }}>
-          <div style={{ width: 28, height: 28, background: "var(--orange)", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "white" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", borderRadius: 8, background: "var(--bg3)", border: "1px solid var(--border)" }}>
+          <div style={{ width: 28, height: 28, background: "var(--orange)", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "white", flexShrink: 0 }}>
             {user?.name?.[0] ?? "A"}
           </div>
-          <span style={{ fontSize: 13, fontWeight: 500 }}>{user?.name ?? "Admin"}</span>
+          <span className="topbar-username" style={{ fontSize: 13, fontWeight: 500 }}>{user?.name ?? "Admin"}</span>
         </div>
 
         {/* Logout */}
