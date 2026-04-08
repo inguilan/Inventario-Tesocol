@@ -127,5 +127,8 @@ Cuando quieras integrar una base de datos real:
 - **Tailwind CSS** — Utilidades de estilo
 
 ---
+## para ingresar credenciales ##
 
+## admin para usuario ##
+## tesocol2026 05 para contraseña ##
 *Desarrollado para TESOCOL — Tecnología Solar de Colombia*
