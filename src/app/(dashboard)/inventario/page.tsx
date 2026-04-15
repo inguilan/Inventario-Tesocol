@@ -27,6 +27,7 @@ function InventarioContent() {
   const [galleryOpen, setGallery] = useState(false);
   const [editId, setEditId]   = useState<string|null>(null);
   const [form, setForm]       = useState(empty());
+  const [photoNames, setPhotoNames] = useState<string[]>([]);
   const [galleryImgs, setGalleryImgs] = useState<string[]>([]);
   const [galleryTitle, setGalleryTitle] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
@@ -43,13 +44,17 @@ function InventarioContent() {
   });
 
   function openAdd() {
-    setEditId(null); setForm(empty()); setModal(true);
+    setEditId(null);
+    setForm(empty());
+    setPhotoNames([]);
+    setModal(true);
   }
   function openEdit(item: Material) {
     setEditId(item.id);
     setForm({ nombre:item.nombre, ref:item.ref, categoria:item.categoria, unidad:item.unidad,
       stock:item.stock, stockMin:item.stockMin, ubicacion:item.ubicacion, proveedor:item.proveedor,
       desc:item.desc, fotos:[...item.fotos] });
+    setPhotoNames(item.fotos.map((_, idx) => `Foto ${idx + 1}`));
     setModal(true);
   }
   function handleDelete(id: string) {
@@ -63,12 +68,15 @@ function InventarioContent() {
       const reader = new FileReader();
       reader.onload = (ev) => {
         setForm((f) => ({ ...f, fotos: [...f.fotos, ev.target!.result as string] }));
+        setPhotoNames((prev) => [...prev, file.name]);
       };
       reader.readAsDataURL(file);
     });
+    if (e.target) e.target.value = "";
   }
   function removePhoto(idx: number) {
     setForm((f) => ({ ...f, fotos: f.fotos.filter((_,i) => i !== idx) }));
+    setPhotoNames((prev) => prev.filter((_, i) => i !== idx));
   }
   function save() {
     if (!form.nombre.trim() || !form.ref.trim()) { toast("Nombre y referencia son obligatorios","error"); return; }
@@ -223,11 +231,12 @@ function InventarioContent() {
               onMouseLeave={(e)=>e.currentTarget.style.borderColor="var(--border)"}
             >
               <div style={{ fontSize:28 }}>📷</div>
-              <p style={{ fontSize:13, color:"var(--text2)", marginTop:6 }}>Haz clic para subir fotos</p>
-              <p style={{ fontSize:11, color:"var(--text3)", marginTop:3 }}>JPG, PNG — múltiples permitidas</p>
+              <p style={{ fontSize:13, color:"var(--text)", marginTop:6, fontWeight:600 }}>Haz clic para subir fotos</p>
+              <p style={{ fontSize:11, color:"var(--text2)", marginTop:3 }}>JPG, PNG - multiples permitidas</p>
             </div>
             <input ref={fileRef} type="file" multiple accept="image/*" style={{ display:"none" }} onChange={handleImages} />
             {form.fotos.length > 0 && (
+              <>
               <div style={{ display:"flex", gap:10, flexWrap:"wrap", marginTop:10 }}>
                 {form.fotos.map((src,i)=>(
                   <div key={i} style={{ position:"relative" }}>
@@ -236,6 +245,14 @@ function InventarioContent() {
                   </div>
                 ))}
               </div>
+              <div style={{ marginTop:10, border:"1px solid var(--border)", borderRadius:8, background:"var(--bg3)", padding:"8px 10px" }}>
+                {photoNames.map((name, i) => (
+                  <div key={`${name}-${i}`} style={{ fontSize:12, color:"var(--text)", lineHeight:1.6, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                    {`${i + 1}. ${name}`}
+                  </div>
+                ))}
+              </div>
+              </>
             )}
           </FormGroup>
         </div>

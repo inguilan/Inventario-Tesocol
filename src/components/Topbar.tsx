@@ -1,9 +1,9 @@
 "use client";
-import { useRouter } from "next/navigation";
-import { signOut } from "next-auth/react";
-import { Search, LogOut, Bell, Menu } from "lucide-react";
-import { useState } from "react";
 import { useStore } from "@/store/useStore";
+import { Bell, LogOut, Menu, Search } from "lucide-react";
+import { signOut } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 interface TopbarProps {
   user?: { name?: string | null; email?: string | null };

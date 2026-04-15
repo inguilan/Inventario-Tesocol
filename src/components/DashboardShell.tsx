@@ -1,7 +1,7 @@
 "use client";
-import { useState } from "react";
 import Sidebar from "@/components/Sidebar";
 import Topbar from "@/components/Topbar";
+import { useState } from "react";
 
 interface DashboardShellProps {
   user?: { name?: string | null; email?: string | null };

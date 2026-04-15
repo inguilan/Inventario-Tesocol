@@ -55,7 +55,7 @@ interface FGProps {
 export function FormGroup({ label, children, full }: FGProps) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6, gridColumn: full ? "1/-1" : undefined }}>
-      <label style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1.2, color: "var(--text2)" }}>
+      <label style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1.2, color: "var(--text)" }}>
         {label}
       </label>
       {children}
@@ -65,7 +65,7 @@ export function FormGroup({ label, children, full }: FGProps) {
 
 // ─── Field styles (use on inputs/selects/textareas) ───────────────────────────
 export const fieldStyle: CSSProperties = {
-  background: "var(--bg3)", border: "1px solid var(--border)", borderRadius: 8,
+  background: "var(--bg3)", border: "1px solid rgba(255,255,255,0.14)", borderRadius: 8,
   color: "var(--text)", fontFamily: "'DM Sans',sans-serif", fontSize: 13,
   padding: "10px 14px", width: "100%", transition: "all .2s",
 };

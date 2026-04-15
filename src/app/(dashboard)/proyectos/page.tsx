@@ -1,11 +1,11 @@
 "use client";
-import { useState } from "react";
-import { Plus, ArrowLeft, FileText, Truck, RotateCcw, Pencil, Trash2 } from "lucide-react";
-import { useStore, getStockStatus, Project } from "@/store/useStore";
-import { Btn, FormGroup, fieldStyle, Badge, EmptyState } from "@/components/ui";
 import Modal from "@/components/Modal";
 import { useToast } from "@/components/Toast";
+import { Badge, Btn, EmptyState, fieldStyle, FormGroup } from "@/components/ui";
 import { generateProjectPDF } from "@/lib/pdf";
+import { Project, useStore } from "@/store/useStore";
+import { ArrowLeft, FileText, Pencil, Plus, RotateCcw, Trash2, Truck } from "lucide-react";
+import { useState } from "react";
 
 type Filter = "all" | "activo" | "pausado" | "finalizado";
 
