@@ -7,8 +7,8 @@ import { Camera, Download, Pencil, Plus, Search, Trash2, X } from "lucide-react"
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
 
-const CATS = ["Paneles Solares","Inversores","Baterías","Estructuras","Cableado","Protecciones","Monitoreo","Otros"];
-const UNITS = ["Unidades","Metros","Rollos","Kg","Cajas","Juegos"];
+const CATS = ["Paneles Solares","Inversores","Baterías","Estructuras","Cableado","Material Eléctrico","EMT","IMC","PVC","Corazas","Abrazaderas","Consumibles"];
+const UNITS = ["Unidades","Metros","Juegos"];
 
 const empty = (): Omit<Material,"id"|"fechaCreacion"> => ({
   nombre:"", ref:"", categoria:CATS[0], unidad:UNITS[0],

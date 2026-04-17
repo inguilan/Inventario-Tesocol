@@ -78,7 +78,7 @@ function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2);
 }
 
-const STORE_VERSION = 2;
+const STORE_VERSION = 3;
 
 export const useStore = create<AppState>()(
   persist(
