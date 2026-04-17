@@ -6,8 +6,15 @@ for (let i = 0; i < 100; i++) {
 
     test(`usuario_${i} crea material`, async ({ page }) => {
 
-        await page.goto('http://localhost:3000');
+        // Autenticarse primero
+        await page.goto('http://localhost:3000/login');
+        await page.waitForLoadState('networkidle');
+        await page.getByRole('textbox', { name: /usuario/i }).fill('admin');
+        await page.getByRole('textbox', { name: /contrase/i }).fill('tesocol2026 05');
+        await page.getByRole('button', { name: /ingresar/i }).click();
+        await page.waitForURL('**/dashboard', { timeout: 10000 });
 
+        await page.goto('http://localhost:3000/inventario');
         await page.waitForLoadState('networkidle');
 
         await page.getByRole('button', { name: 'Nuevo Material' }).click();
