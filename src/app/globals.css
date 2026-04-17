@@ -90,6 +90,10 @@ input:focus, select:focus, textarea:focus {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: none; }
 }
+@keyframes fadeSlideDown {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: none; }
+}
 .animate-modal  { animation: modalIn .2s ease; }
 .animate-slide  { animation: slideInRight .3s ease; }
 .animate-fadein { animation: fadeIn .3s ease both; }
