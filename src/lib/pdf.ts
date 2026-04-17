@@ -44,18 +44,24 @@ function addFooter(doc: any) {
 }
 
 // ─── Full inventory PDF ───────────────────────────────────────────────────────
-export async function generateInventoryPDF(inventory: Material[]) {
+export async function generateInventoryPDF(inventory: Material[], selectedCategories: string[] = []) {
   const JsPDF = await getJsPDF();
   const doc = new JsPDF();
   addHeader(doc, "REPORTE DE INVENTARIO");
+
+  const hasCategoryFilter = selectedCategories.length > 0;
+  const categorySummary = hasCategoryFilter
+    ? `Categorías: ${selectedCategories.join(", ")}`
+    : "Categorías: Todas";
 
   doc.setFontSize(9);
   doc.setTextColor(150);
   doc.setFont("helvetica", "normal");
   doc.text(`Generado: ${new Date().toLocaleString("es-CO")}`, 14, 48);
   doc.text(`Total materiales: ${inventory.length}`, 14, 54);
+  doc.text(categorySummary.slice(0, 120), 14, 60);
 
-  let y = 64;
+  let y = 70;
   // Table header
   doc.setFillColor(245, 98, 15);
   doc.rect(14, y, 182, 8, "F");
@@ -88,7 +94,11 @@ export async function generateInventoryPDF(inventory: Material[]) {
   });
 
   addFooter(doc);
-  doc.save(`TESOCOL_Inventario_${new Date().toLocaleDateString("es-CO").replace(/\//g, "-")}.pdf`);
+  const dateSuffix = new Date().toLocaleDateString("es-CO").replace(/\//g, "-");
+  const fileName = hasCategoryFilter
+    ? `TESOCOL_Inventario_Filtrado_${dateSuffix}.pdf`
+    : `TESOCOL_Inventario_${dateSuffix}.pdf`;
+  doc.save(fileName);
 }
 
 // ─── Project PDF ──────────────────────────────────────────────────────────────

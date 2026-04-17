@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { FileText } from "lucide-react";
 import { useStore } from "@/store/useStore";
 import { Btn } from "@/components/ui";
@@ -10,7 +10,13 @@ export default function ReportesPage() {
   const { inventory, projects, dispatches } = useStore();
   const { toast } = useToast();
   const [selProject, setSelProject] = useState(projects[0]?.id || "");
+  const [selCategory, setSelCategory] = useState("");
   const [loading, setLoading] = useState<string | null>(null);
+
+  const categories = useMemo(
+    () => Array.from(new Set(inventory.map((i) => i.categoria))).sort((a, b) => a.localeCompare(b)),
+    [inventory]
+  );
 
   async function run(key: string, fn: () => Promise<any>) {
     setLoading(key);
@@ -25,7 +31,29 @@ export default function ReportesPage() {
       icon: "📦",
       title: "Inventario Completo",
       desc: "PDF con todos los materiales, stock actual y estado de cada ítem.",
-      action: () => run("inventory", () => generateInventoryPDF(inventory)),
+      extra: (
+        <select
+          value={selCategory}
+          onChange={(e) => setSelCategory(e.target.value)}
+          style={{ background:"var(--bg3)", border:"1px solid var(--border)", borderRadius:8, color:"var(--text)", fontFamily:"'DM Sans',sans-serif", fontSize:13, padding:"9px 12px", width:"100%", marginBottom:12 }}
+        >
+          <option value="">Todas las categorías</option>
+          {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+      ),
+      action: () => {
+        const filteredInventory =
+          !selCategory
+            ? inventory
+            : inventory.filter((item) => item.categoria === selCategory);
+
+        if (filteredInventory.length === 0) {
+          toast("No hay materiales para la categoría seleccionada", "info");
+          return;
+        }
+
+        run("inventory", () => generateInventoryPDF(filteredInventory, selCategory ? [selCategory] : []));
+      },
     },
     {
       key: "project",
