@@ -1,4 +1,5 @@
 "use client";
+import CloudSync from "@/components/CloudSync";
 import Sidebar from "@/components/Sidebar";
 import Topbar from "@/components/Topbar";
 import { useState } from "react";
@@ -13,6 +14,8 @@ export default function DashboardShell({ user, children }: DashboardShellProps) 
 
   return (
     <div style={{ display: "flex", minHeight: "100vh" }}>
+      <CloudSync />
+
       {/* Overlay para móvil */}
       <div
         className={`sidebar-overlay ${sidebarOpen ? "sidebar-open" : ""}`}

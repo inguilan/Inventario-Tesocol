@@ -1,6 +1,5 @@
 "use client";
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -53,6 +52,13 @@ export interface Movement {
   fecha: string;
 }
 
+export interface AppDataSnapshot {
+  inventory: Material[];
+  projects: Project[];
+  dispatches: Dispatch[];
+  movements: Movement[];
+}
+
 // ─── Store ────────────────────────────────────────────────────────────────────
 
 interface AppState {
@@ -60,7 +66,7 @@ interface AppState {
   projects: Project[];
   dispatches: Dispatch[];
   movements: Movement[];
-  setInventory: (items: Material[]) => void;
+  setAppData: (data: AppDataSnapshot) => void;
   // Inventory actions
   addMaterial: (m: Omit<Material, "id" | "fechaCreacion">) => void;
   updateMaterial: (id: string, m: Partial<Material>) => void;
@@ -79,16 +85,18 @@ function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2);
 }
 
-const STORE_VERSION = 3;
-
-export const useStore = create<AppState>()(
-  persist(
-    (set, get) => ({
+export const useStore = create<AppState>()((set, get) => ({
       inventory: [],
       projects: [],
       dispatches: [],
       movements: [],
-      setInventory: (items) => set(() => ({ inventory: items })),
+      setAppData: (data) =>
+        set(() => ({
+          inventory: data.inventory,
+          projects: data.projects,
+          dispatches: data.dispatches,
+          movements: data.movements,
+        })),
 
       addMaterial: (m) => {
         const mat: Material = { ...m, id: uid(), fechaCreacion: new Date().toLocaleDateString("es-CO") };
@@ -155,24 +163,7 @@ export const useStore = create<AppState>()(
           inventory: s.inventory.map((i) => (i.id === prev.itemId ? { ...i, stock: stockAdjusted } : i)),
         }));
       },
-    }),
-    {
-      name: "tesocol-store",
-      version: STORE_VERSION,
-      migrate: (persistedState: any, version) => {
-        if (version < STORE_VERSION) {
-          return {
-            ...persistedState,
-            inventory: [],
-            projects: [],
-            dispatches: [],
-            movements: [],
-          };
-        }
-        return persistedState;
-      },
-    }
-  )
+    })
 );
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
