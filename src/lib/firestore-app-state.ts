@@ -1,4 +1,4 @@
-import { collection, doc, getDocs, getFirestore, setDoc, writeBatch } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDocs, getFirestore, setDoc, writeBatch } from "firebase/firestore";
 import { firebaseApp } from "@/lib/firebase";
 import type { AppDataSnapshot } from "@/store/useStore";
 
@@ -54,33 +54,79 @@ export async function loadAppStateFromFirestore(): Promise<AppDataSnapshot> {
   }
 }
 
+/**
+ * Sincroniza el estado de la app a Firestore.
+ * - Escribe/actualiza documentos que existen en el estado
+ * - Borra documentos que NO existen en el estado (garbage collection)
+ */
 export async function syncAppStateToFirestore(snapshot: AppDataSnapshot): Promise<void> {
   const db = getDb();
   const batch = writeBatch(db);
   const configRef = getTesocolRef();
 
-  // Add metadata update
+  // Metadata update
   batch.set(configRef, { updatedAt: new Date().toISOString() }, { merge: true });
 
-  // Add all materiales
+  // ─── MATERIALES ────────────────────────────────────────────────
+  const currentMaterialIds = new Set(snapshot.inventory.map((m) => m.id));
+  const materialesCol = collection(db, TESOCOL_COLLECTION, "config", SUBCOLLECTIONS.MATERIALES);
+  const existingMateriales = await getDocs(materialesCol);
+  
   snapshot.inventory.forEach((item) => {
     const ref = doc(db, TESOCOL_COLLECTION, "config", SUBCOLLECTIONS.MATERIALES, item.id);
     batch.set(ref, item, { merge: true });
   });
+  
+  // Delete materiales que fueron removidos
+  existingMateriales.docs.forEach((doc) => {
+    if (!currentMaterialIds.has(doc.id)) {
+      batch.delete(doc.ref);
+    }
+  });
 
-  // Add all proyectos
+  // ─── PROYECTOS ────────────────────────────────────────────────
+  const currentProjectIds = new Set(snapshot.projects.map((p) => p.id));
+  const proyectosCol = collection(db, TESOCOL_COLLECTION, "config", SUBCOLLECTIONS.PROYECTOS);
+  const existingProyectos = await getDocs(proyectosCol);
+  
   snapshot.projects.forEach((proj) => {
     const ref = doc(db, TESOCOL_COLLECTION, "config", SUBCOLLECTIONS.PROYECTOS, proj.id);
     batch.set(ref, proj, { merge: true });
   });
+  
+  // Delete proyectos que fueron removidos
+  existingProyectos.docs.forEach((doc) => {
+    if (!currentProjectIds.has(doc.id)) {
+      batch.delete(doc.ref);
+    }
+  });
 
-  // Add all despachos
+  // ─── DESPACHOS ────────────────────────────────────────────────
+  const currentDispatchIds = new Set(snapshot.dispatches.map((d) => d.id));
+  const despachosColl = collection(db, TESOCOL_COLLECTION, "config", SUBCOLLECTIONS.DESPACHOS);
+  const existingDespachos = await getDocs(despachosColl);
+  
   snapshot.dispatches.forEach((disp) => {
     const ref = doc(db, TESOCOL_COLLECTION, "config", SUBCOLLECTIONS.DESPACHOS, disp.id);
     batch.set(ref, disp, { merge: true });
   });
+  
+  // Delete despachos que fueron removidos
+  existingDespachos.docs.forEach((doc) => {
+    if (!currentDispatchIds.has(doc.id)) {
+      batch.delete(doc.ref);
+    }
+  });
 
-  // Add all movimientos
+  // ─── MOVIMIENTOS ────────────────────────────────────────────────
+  // Para movimientos, borrar todos y reescribir (son transaccionales)
+  const movimientosCol = collection(db, TESOCOL_COLLECTION, "config", SUBCOLLECTIONS.MOVIMIENTOS);
+  const existingMovimientos = await getDocs(movimientosCol);
+  
+  existingMovimientos.docs.forEach((doc) => {
+    batch.delete(doc.ref);
+  });
+  
   snapshot.movements.forEach((mov, idx) => {
     const ref = doc(db, TESOCOL_COLLECTION, "config", SUBCOLLECTIONS.MOVIMIENTOS, `${mov.fecha}-${idx}`);
     batch.set(ref, mov, { merge: true });
