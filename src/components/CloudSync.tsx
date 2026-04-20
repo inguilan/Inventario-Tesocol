@@ -4,7 +4,7 @@ import { useToast } from "@/components/Toast";
 import { firebaseApp, hasFirebaseConfig } from "@/lib/firebase";
 import { loadAppStateFromFirestore, syncAppStateToFirestore } from "@/lib/firestore-app-state";
 import { useStore } from "@/store/useStore";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useRef } from "react";
 
 function getFirebaseErrorMessage(error: unknown) {
   if (typeof error === "object" && error !== null && "code" in error) {
@@ -25,12 +25,10 @@ export default function CloudSync() {
   const readyToSyncRef = useRef(false);
   const hydratingRef = useRef(true);
   const syncErrorShownRef = useRef(false);
+  const lastSyncRef = useRef<string>("");
+  const syncTimeoutRef = useRef<NodeJS.Timeout>();
 
-  const snapshot = useMemo(
-    () => ({ inventory, projects, dispatches, movements }),
-    [inventory, projects, dispatches, movements]
-  );
-
+  // Bootstrap: cargar estado inicial desde Firestore
   useEffect(() => {
     let active = true;
 
@@ -67,25 +65,47 @@ export default function CloudSync() {
     };
   }, [setAppData, toast]);
 
+  // Sincronizacion continua: debounced para no hacer writes innecesarios
   useEffect(() => {
     if (hydratingRef.current || !readyToSyncRef.current) {
       return;
     }
 
-    const timer = setTimeout(() => {
-      syncAppStateToFirestore(snapshot).catch((error) => {
+    // Create a snapshot string to detect actual changes
+    const currentSnapshotStr = JSON.stringify({
+      inventory,
+      projects,
+      dispatches,
+      movements,
+    });
+
+    // Only sync if data has actually changed
+    if (currentSnapshotStr === lastSyncRef.current) {
+      return;
+    }
+
+    // Clear existing timeout to debounce
+    if (syncTimeoutRef.current) {
+      clearTimeout(syncTimeoutRef.current);
+    }
+
+    syncTimeoutRef.current = setTimeout(() => {
+      syncAppStateToFirestore({ inventory, projects, dispatches, movements }).catch((error) => {
         console.error("No fue posible sincronizar estado con Firestore", error);
         if (!syncErrorShownRef.current) {
           syncErrorShownRef.current = true;
           toast(getFirebaseErrorMessage(error), "error");
         }
       });
+      lastSyncRef.current = currentSnapshotStr;
     }, 500);
 
     return () => {
-      clearTimeout(timer);
+      if (syncTimeoutRef.current) {
+        clearTimeout(syncTimeoutRef.current);
+      }
     };
-  }, [snapshot, toast]);
+  }, [inventory, projects, dispatches, movements, toast]);
 
   return null;
 }

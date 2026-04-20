@@ -82,13 +82,22 @@ npm run dev
 2. Asegura que `NEXTAUTH_URL` apunte a tu dominio de Vercel.
 3. Haz redeploy despues de cambiar variables.
 
-## Firestore: estado actual y reglas
+## Firestore: estructura organizada y optimizacion
 
-- Toda la informacion funcional se sincroniza en Firestore.
-- El estado se guarda en el documento `tesocol/app_state`.
+- Toda la informacion funcional se sincroniza en Firestore en **colecciones separadas** para mejor organizacion y escalabilidad.
+- Estructura: `tesocol/config/{materiales, proyectos, despachos, movimientos}`
+- Cada documento tiene su ID como clave y se sincroniza con debounce (500ms) para evitar escrituras innecesarias.
+- El componente `CloudSync.tsx` orquesta toda la sincronizacion en tiempo real.
 - Si no aparecen datos, revisa reglas de Firestore y errores de permisos.
 - Para pruebas rapidas se puede usar regla abierta temporal.
 - Para produccion, usa reglas restringidas a usuarios autenticados.
+
+### Beneficios de esta arquitectura:
+
+✅ **Mejor organizacion**: cada modulo (materiales, proyectos, despachos) en su propia coleccion  
+✅ **Escalable**: no hay limites de tamaño de documento  
+✅ **Eficiente**: cambios detectados por JSON diff, no sincroniza si no hay cambios  
+✅ **Seguro**: tokens JWT extendidos a 24h, menos regeneracion en refrescos frecuentes
 
 ## Estructura del Codigo (claves)
 

@@ -33,7 +33,7 @@ export const authOptions: NextAuthOptions = {
   ],
   session: {
     strategy: "jwt",
-    maxAge: 8 * 60 * 60,
+    maxAge: 24 * 60 * 60, // 24 horas - reduce token regeneration on frequent page refreshes
   },
   pages: {
     signIn: "/login",
