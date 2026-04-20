@@ -2,6 +2,8 @@
 import Modal from "@/components/Modal";
 import { useToast } from "@/components/Toast";
 import { Badge, Btn, EmptyState, fieldStyle, FormGroup } from "@/components/ui";
+import { firebaseApp, hasFirebaseConfig } from "@/lib/firebase";
+import { loadMaterialsFromFirestore, syncMaterialsToFirestore } from "@/lib/firestore-materials";
 import { getCatEmoji, getStockStatus, Material, useStore } from "@/store/useStore";
 import { Camera, Download, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { useSearchParams } from "next/navigation";
@@ -15,8 +17,15 @@ const empty = (): Omit<Material,"id"|"fechaCreacion"> => ({
   stock:0, stockMin:5, ubicacion:"", proveedor:"", desc:"", fotos:[],
 });
 
+function getFirebaseErrorMessage(error: unknown) {
+  if (typeof error === "object" && error !== null && "code" in error) {
+    return `Firebase: ${(error as { code: string }).code}`;
+  }
+  return "Error de conexion con Firebase";
+}
+
 function InventarioContent() {
-  const { inventory, addMaterial, updateMaterial, deleteMaterial } = useStore();
+  const { inventory, setInventory, addMaterial, updateMaterial, deleteMaterial } = useStore();
   const { toast } = useToast();
   const params = useSearchParams();
 
@@ -30,9 +39,79 @@ function InventarioContent() {
   const [photoNames, setPhotoNames] = useState<string[]>([]);
   const [galleryImgs, setGalleryImgs] = useState<string[]>([]);
   const [galleryTitle, setGalleryTitle] = useState("");
+  const [cloudReady, setCloudReady] = useState(false);
+  const [loadingCloud, setLoadingCloud] = useState(false);
+  const [firebaseError, setFirebaseError] = useState<string | null>(null);
+  const syncErrorShownRef = useRef(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { setSearch(params.get("q") || ""); }, [params]);
+
+  useEffect(() => {
+    if (!hasFirebaseConfig) {
+      console.warn("Firebase no esta configurado: faltan variables NEXT_PUBLIC_FIREBASE_*");
+      return;
+    }
+    if (firebaseApp) {
+      console.info("Firebase conectado:", firebaseApp.name);
+    }
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    async function bootstrapFromCloud() {
+      if (!hasFirebaseConfig || !firebaseApp) return;
+      setLoadingCloud(true);
+      try {
+        const cloudMaterials = await loadMaterialsFromFirestore();
+        if (!active) return;
+        if (cloudMaterials.length > 0) {
+          setInventory(cloudMaterials);
+        }
+        setFirebaseError(null);
+      } catch (error) {
+        console.error("No fue posible cargar datos desde Firestore", error);
+        if (active) {
+          const msg = getFirebaseErrorMessage(error);
+          setFirebaseError(msg);
+          toast(msg, "error");
+        }
+      } finally {
+        if (active) {
+          setCloudReady(true);
+          setLoadingCloud(false);
+        }
+      }
+    }
+
+    bootstrapFromCloud();
+    return () => {
+      active = false;
+    };
+  }, [setInventory, toast]);
+
+  useEffect(() => {
+    if (!hasFirebaseConfig || !firebaseApp || !cloudReady || loadingCloud) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      syncMaterialsToFirestore(inventory).catch((error) => {
+        console.error("No fue posible sincronizar inventario con Firestore", error);
+        const msg = getFirebaseErrorMessage(error);
+        setFirebaseError(msg);
+        if (!syncErrorShownRef.current) {
+          syncErrorShownRef.current = true;
+          toast(msg, "error");
+        }
+      });
+    }, 500);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [inventory, cloudReady, loadingCloud]);
 
   const filtered = inventory.filter((i) => {
     const q = search.toLowerCase();
@@ -105,6 +184,11 @@ function InventarioContent() {
     <div className="animate-fadein">
       {/* Filters */}
       <div style={{ display:"flex", gap:10, marginBottom:18, flexWrap:"wrap", alignItems:"center" }}>
+        {firebaseError && (
+          <div style={{ width:"100%", border:"1px solid rgba(220,38,38,.45)", background:"rgba(220,38,38,.12)", color:"#fecaca", borderRadius:8, padding:"8px 10px", fontSize:12 }}>
+            {firebaseError}. Revisa las reglas de Firestore y que la app web sea del proyecto correcto.
+          </div>
+        )}
         <div style={{ display:"flex", alignItems:"center", gap:8, background:"var(--bg3)", border:"1px solid var(--border)", borderRadius:8, padding:"8px 14px" }}>
           <Search size={14} color="var(--text3)" />
           <input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Buscar..." style={{ background:"none", border:"none", outline:"none", color:"var(--text)", fontSize:13, fontFamily:"'DM Sans',sans-serif", width:180 }} />

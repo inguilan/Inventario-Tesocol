@@ -60,6 +60,7 @@ interface AppState {
   projects: Project[];
   dispatches: Dispatch[];
   movements: Movement[];
+  setInventory: (items: Material[]) => void;
   // Inventory actions
   addMaterial: (m: Omit<Material, "id" | "fechaCreacion">) => void;
   updateMaterial: (id: string, m: Partial<Material>) => void;
@@ -87,6 +88,7 @@ export const useStore = create<AppState>()(
       projects: [],
       dispatches: [],
       movements: [],
+      setInventory: (items) => set(() => ({ inventory: items })),
 
       addMaterial: (m) => {
         const mat: Material = { ...m, id: uid(), fechaCreacion: new Date().toLocaleDateString("es-CO") };
