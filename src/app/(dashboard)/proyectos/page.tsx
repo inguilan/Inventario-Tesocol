@@ -9,10 +9,20 @@ import { useState } from "react";
 
 type Filter = "all" | "activo" | "pausado" | "finalizado";
 
+type DispatchRow = {
+  itemId: string;
+  qty: number;
+  resp: string;
+  obs: string;
+  materialQuery: string;
+  materialCategory: string;
+};
+
 const statusBadge: Record<string,string> = { activo:"badge-green", pausado:"badge-yellow", finalizado:"badge-blue" };
 const statusEmoji: Record<string,string> = { activo:"🟢", pausado:"🟡", finalizado:"🔵" };
 
 const emptyProj = (): Omit<Project,"id"> => ({ nombre:"", lider:"", desc:"", ubicacion:"", fecha:new Date().toISOString().slice(0,10), status:"activo" });
+const emptyDispatchRow = (): DispatchRow => ({ itemId:"", qty:0, resp:"", obs:"", materialQuery:"", materialCategory:"all" });
 
 export default function ProyectosPage() {
   const { projects, dispatches, inventory, addProject, updateProject, deleteProject, addDispatch, addReturn } = useStore();
@@ -25,8 +35,10 @@ export default function ProyectosPage() {
   const [returnModal, setReturn]        = useState(false);
   const [editProjId, setEditProjId]     = useState<string|null>(null);
   const [projForm, setProjForm]         = useState(emptyProj());
-  const [dispRows, setDispRows]         = useState([{ itemId:"", qty:0, resp:"", obs:"" }]);
+  const [dispRows, setDispRows]         = useState<DispatchRow[]>([emptyDispatchRow()]);
   const [retForm, setRetForm]           = useState({ itemId:"", qty:0, resp:"", obs:"" });
+
+  const materialCategories = Array.from(new Set(inventory.map((i) => i.categoria))).sort((a, b) => a.localeCompare(b, "es"));
 
   const project = selected ? projects.find((p)=>p.id===selected) : null;
   const projDispatches = dispatches.filter((d)=>d.projectId===selected);
@@ -59,7 +71,7 @@ export default function ProyectosPage() {
       });
       toast("Despacho registrado","success");
       setDispatch(false);
-      setDispRows([{ itemId:"", qty:0, resp:"", obs:"" }]);
+      setDispRows([emptyDispatchRow()]);
     } catch(e:any) { toast(e.message,"error"); }
   }
 
@@ -100,7 +112,7 @@ export default function ProyectosPage() {
           </div>
           <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
             <Btn variant="ghost" size="sm" onClick={()=>generateProjectPDF(project, projDispatches)}><FileText size={14}/> PDF</Btn>
-            <Btn variant="orange" size="sm" onClick={()=>{ setDispRows([{itemId:"",qty:0,resp:"",obs:""}]); setDispatch(true); }}><Truck size={14}/> Despachar</Btn>
+            <Btn variant="orange" size="sm" onClick={()=>{ setDispRows([emptyDispatchRow()]); setDispatch(true); }}><Truck size={14}/> Despachar</Btn>
             <Btn variant="success" size="sm" onClick={()=>{ setRetForm({itemId:dispatchedItems[0]?.id||"",qty:0,resp:"",obs:""}); setReturn(true); }}><RotateCcw size={14}/> Devolver</Btn>
           </div>
         </div>
@@ -141,17 +153,58 @@ export default function ProyectosPage() {
           {dispRows.map((row,i)=>(
             <div key={i} style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14, marginBottom:16, paddingBottom:16, borderBottom: i<dispRows.length-1?"1px solid var(--border)":"none" }}>
               <FormGroup label={`Material ${i>0?i+1:""}`} full>
-                <select value={row.itemId} onChange={(e)=>{ const r=[...dispRows]; r[i].itemId=e.target.value; setDispRows(r); }} style={fieldStyle}>
-                  <option value="">Seleccionar material...</option>
-                  {inventory.map((inv)=><option key={inv.id} value={inv.id}>{inv.nombre} (Stock: {inv.stock} {inv.unidad})</option>)}
-                </select>
+                <div style={{ display:"grid", gap:8 }}>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1.2fr", gap:8 }}>
+                    <select
+                      value={row.materialCategory}
+                      onChange={(e)=>{ const r=[...dispRows]; r[i].materialCategory=e.target.value; setDispRows(r); }}
+                      style={fieldStyle}
+                    >
+                      <option value="all">Todas las categorías</option>
+                      {materialCategories.map((cat) => <option key={cat} value={cat}>{cat}</option>)}
+                    </select>
+                    <input
+                      value={row.materialQuery}
+                      onChange={(e)=>{ const r=[...dispRows]; r[i].materialQuery=e.target.value; setDispRows(r); }}
+                      placeholder="Buscar por nombre, referencia o especificación..."
+                      style={fieldStyle}
+                    />
+                  </div>
+
+                  <select value={row.itemId} onChange={(e)=>{ const r=[...dispRows]; r[i].itemId=e.target.value; setDispRows(r); }} style={fieldStyle}>
+                    <option value="">Seleccionar material...</option>
+                    {inventory
+                      .filter((inv) => {
+                        const byCategory = row.materialCategory === "all" || inv.categoria === row.materialCategory;
+                        if (!byCategory) return false;
+                        const term = row.materialQuery.trim().toLowerCase();
+                        if (!term) return true;
+                        const haystack = `${inv.nombre} ${inv.ref} ${inv.categoria} ${inv.desc} ${inv.proveedor}`.toLowerCase();
+                        return haystack.includes(term);
+                      })
+                      .map((inv)=><option key={inv.id} value={inv.id}>{inv.nombre} · {inv.ref || "Sin ref"} · {inv.categoria} (Stock: {inv.stock} {inv.unidad})</option>)}
+                  </select>
+
+                  {(() => {
+                    const selectedItem = inventory.find((inv) => inv.id === row.itemId);
+                    if (!selectedItem) return null;
+                    return (
+                      <div style={{ border:"1px solid var(--border)", borderRadius:8, padding:"8px 10px", background:"var(--bg2)", fontSize:12, color:"var(--text2)", display:"grid", gap:4 }}>
+                        <div style={{ color:"var(--text)", fontWeight:700 }}>Seleccionado: {selectedItem.nombre}</div>
+                        <div>Ref: {selectedItem.ref || "—"} · Categoría: {selectedItem.categoria || "—"}</div>
+                        <div>Disponible: {selectedItem.stock} {selectedItem.unidad} · Ubicación: {selectedItem.ubicacion || "—"}</div>
+                        <div><strong style={{ color:"var(--text)" }}>Especificaciones:</strong> {selectedItem.desc || "Sin especificaciones"}</div>
+                      </div>
+                    );
+                  })()}
+                </div>
               </FormGroup>
               <FormGroup label="Cantidad"><input type="number" min={1} value={row.qty||""} onChange={(e)=>{ const r=[...dispRows]; r[i].qty=+e.target.value; setDispRows(r); }} style={fieldStyle} /></FormGroup>
               <FormGroup label="Responsable"><input value={row.resp} onChange={(e)=>{ const r=[...dispRows]; r[i].resp=e.target.value; setDispRows(r); }} placeholder="Nombre" style={fieldStyle} /></FormGroup>
               <FormGroup label="Observaciones"><input value={row.obs} onChange={(e)=>{ const r=[...dispRows]; r[i].obs=e.target.value; setDispRows(r); }} placeholder="Notas..." style={fieldStyle} /></FormGroup>
             </div>
           ))}
-          <Btn variant="ghost" size="sm" onClick={()=>setDispRows([...dispRows,{itemId:"",qty:0,resp:"",obs:""}])}>+ Agregar otro material</Btn>
+          <Btn variant="ghost" size="sm" onClick={()=>setDispRows([...dispRows, emptyDispatchRow()])}>+ Agregar otro material</Btn>
         </Modal>
 
         {/* Return Modal */}

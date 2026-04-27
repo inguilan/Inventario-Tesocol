@@ -20,6 +20,8 @@ export default function DespachosPage() {
   const { toast } = useToast();
   const [modalOpen, setModalOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
+  const [materialQuery, setMaterialQuery] = useState("");
+  const [materialCategory, setMaterialCategory] = useState("all");
   const [form, setForm] = useState<DispatchForm>({
     projectId: "",
     itemId: "",
@@ -28,6 +30,17 @@ export default function DespachosPage() {
     obs: "",
     tipo: "despacho",
   });
+
+  const materialCategories = Array.from(new Set(inventory.map((i) => i.categoria))).sort((a, b) => a.localeCompare(b, "es"));
+  const term = materialQuery.trim().toLowerCase();
+  const filteredInventory = inventory.filter((i) => {
+    const byCategory = materialCategory === "all" || i.categoria === materialCategory;
+    if (!byCategory) return false;
+    if (!term) return true;
+    const haystack = `${i.nombre} ${i.ref} ${i.categoria} ${i.desc} ${i.proveedor}`.toLowerCase();
+    return haystack.includes(term);
+  });
+  const selectedItem = inventory.find((i) => i.id === form.itemId);
 
   const canCreateDispatch = projects.length > 0 && inventory.length > 0;
 
@@ -60,6 +73,8 @@ export default function DespachosPage() {
       obs: "",
       tipo: "despacho",
     });
+    setMaterialCategory("all");
+    setMaterialQuery("");
     setModalOpen(true);
   }
 
@@ -73,6 +88,8 @@ export default function DespachosPage() {
       obs: d.obs,
       tipo: d.tipo,
     });
+    setMaterialCategory("all");
+    setMaterialQuery(d.itemNombre || d.itemRef || "");
     setModalOpen(true);
   }
 
@@ -193,10 +210,89 @@ export default function DespachosPage() {
             </select>
           </FormGroup>
           <FormGroup label="Material" full>
-            <select value={form.itemId} onChange={(e)=>setForm({ ...form, itemId: e.target.value })} style={fieldStyle}>
-              <option value="">Seleccionar material...</option>
-              {inventory.map((i) => <option key={i.id} value={i.id}>{i.nombre} (Stock: {i.stock} {i.unidad})</option>)}
-            </select>
+            <div style={{ display:"grid", gap:10 }}>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1.4fr", gap:10 }}>
+                <select
+                  value={materialCategory}
+                  onChange={(e) => setMaterialCategory(e.target.value)}
+                  style={fieldStyle}
+                >
+                  <option value="all">Todas las categorías</option>
+                  {materialCategories.map((cat) => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+                <input
+                  value={materialQuery}
+                  onChange={(e) => setMaterialQuery(e.target.value)}
+                  placeholder="Buscar por nombre, referencia o especificación..."
+                  style={fieldStyle}
+                />
+              </div>
+
+              <div style={{ border:"1px solid var(--border)", borderRadius:10, background:"var(--bg3)", maxHeight:220, overflowY:"auto", padding:8, display:"grid", gap:8 }}>
+                {filteredInventory.length === 0 ? (
+                  <div style={{ color:"var(--text2)", fontSize:12, padding:"10px 8px" }}>
+                    No hay materiales que coincidan con el filtro.
+                  </div>
+                ) : (
+                  filteredInventory.map((i) => {
+                    const active = form.itemId === i.id;
+                    return (
+                      <button
+                        key={i.id}
+                        type="button"
+                        onClick={() => setForm({ ...form, itemId: i.id })}
+                        style={{
+                          textAlign:"left",
+                          background: active ? "rgba(245,98,15,0.12)" : "var(--bg2)",
+                          border: active ? "1px solid rgba(245,98,15,0.6)" : "1px solid var(--border)",
+                          borderRadius:8,
+                          color:"var(--text)",
+                          padding:"9px 10px",
+                          cursor:"pointer",
+                          display:"grid",
+                          gap:5,
+                        }}
+                      >
+                        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                          <strong style={{ fontSize:13 }}>{i.nombre}</strong>
+                          <span style={{ fontSize:11, color:"var(--text2)", marginLeft:"auto" }}>
+                            Stock: {i.stock} {i.unidad}
+                          </span>
+                        </div>
+                        <div style={{ fontSize:11, color:"var(--text2)", display:"flex", gap:10, flexWrap:"wrap" }}>
+                          <span>Ref: {i.ref || "—"}</span>
+                          <span>Cat: {i.categoria || "—"}</span>
+                        </div>
+                        {!!i.desc && (
+                          <div style={{ fontSize:11, color:"var(--text3)", lineHeight:1.35 }}>
+                            {i.desc.length > 110 ? `${i.desc.slice(0, 110)}...` : i.desc}
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+
+              {selectedItem && (
+                <div style={{ border:"1px solid var(--border)", borderRadius:10, padding:"10px 12px", background:"var(--bg2)", display:"grid", gap:6 }}>
+                  <div style={{ fontSize:12, fontWeight:700, color:"var(--orange)" }}>Material seleccionado</div>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"6px 10px", fontSize:12 }}>
+                    <div><strong>Nombre:</strong> {selectedItem.nombre}</div>
+                    <div><strong>Categoría:</strong> {selectedItem.categoria || "—"}</div>
+                    <div><strong>Referencia:</strong> {selectedItem.ref || "—"}</div>
+                    <div><strong>Disponible:</strong> {selectedItem.stock} {selectedItem.unidad}</div>
+                    <div><strong>Ubicación:</strong> {selectedItem.ubicacion || "—"}</div>
+                    <div><strong>Proveedor:</strong> {selectedItem.proveedor || "—"}</div>
+                  </div>
+                  <div style={{ fontSize:12, color:"var(--text2)" }}>
+                    <strong style={{ color:"var(--text)" }}>Especificaciones:</strong> {selectedItem.desc || "Sin especificaciones"}
+                  </div>
+                </div>
+              )}
+            </div>
           </FormGroup>
           <FormGroup label="Tipo">
             <select value={form.tipo} onChange={(e)=>setForm({ ...form, tipo: e.target.value as DispatchForm["tipo"] })} style={fieldStyle}>

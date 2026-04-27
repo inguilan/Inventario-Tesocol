@@ -12,14 +12,14 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials) {
         if (!credentials?.username || !credentials?.password) return null;
 
-        const validUser = process.env.ADMIN_USERNAME || "admin";
-        const validPass = process.env.ADMIN_PASSWORD || "tesocol2025";
+        const inputUser = credentials.username.trim();
+        const inputPass = credentials.password;
+
+        const validUser = (process.env.ADMIN_USERNAME || "admin").trim();
+        const validPass = process.env.ADMIN_PASSWORD || "Tesocol2026";
         const adminName = process.env.ADMIN_NAME || "Administrador";
 
-        if (
-          credentials.username === validUser &&
-          credentials.password === validPass
-        ) {
+        if (inputUser === validUser && inputPass === validPass) {
           return {
             id: "1",
             name: adminName,
