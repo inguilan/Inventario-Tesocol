@@ -4,7 +4,7 @@ import { useToast } from "@/components/Toast";
 import { Badge, Btn, EmptyState, fieldStyle, FormGroup } from "@/components/ui";
 import { generateProjectPDF } from "@/lib/pdf";
 import { Project, useStore } from "@/store/useStore";
-import { ArrowLeft, FileText, Pencil, Plus, RotateCcw, Trash2, Truck } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronUp, FileText, Pencil, Plus, RotateCcw, Search, Trash2, Truck } from "lucide-react";
 import { useState } from "react";
 
 type Filter = "all" | "activo" | "pausado" | "finalizado";
@@ -36,6 +36,7 @@ export default function ProyectosPage() {
   const [editProjId, setEditProjId]     = useState<string|null>(null);
   const [projForm, setProjForm]         = useState(emptyProj());
   const [dispRows, setDispRows]         = useState<DispatchRow[]>([emptyDispatchRow()]);
+  const [activeDispatchRow, setActiveDispatchRow] = useState(0);
   const [retForm, setRetForm]           = useState({ itemId:"", qty:0, resp:"", obs:"" });
 
   const materialCategories = Array.from(new Set(inventory.map((i) => i.categoria))).sort((a, b) => a.localeCompare(b, "es"));
@@ -72,7 +73,53 @@ export default function ProyectosPage() {
       toast("Despacho registrado","success");
       setDispatch(false);
       setDispRows([emptyDispatchRow()]);
+      setActiveDispatchRow(0);
     } catch(e:any) { toast(e.message,"error"); }
+  }
+
+  function updateDispatchRow(index: number, patch: Partial<DispatchRow>) {
+    setDispRows((rows) => rows.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row)));
+  }
+
+  function removeDispatchRow(index: number) {
+    setDispRows((rows) => {
+      if (rows.length === 1) return [emptyDispatchRow()];
+      return rows.filter((_, rowIndex) => rowIndex !== index);
+    });
+    setActiveDispatchRow((current) => {
+      if (dispRows.length <= 1) return 0;
+      if (index < current) return current - 1;
+      if (index === current) return Math.max(0, current - 1);
+      return current;
+    });
+  }
+
+  function getFilteredInventory(row: DispatchRow) {
+    const term = row.materialQuery.trim().toLowerCase();
+
+    return inventory.filter((inv) => {
+      const byCategory = row.materialCategory === "all" || inv.categoria === row.materialCategory;
+      if (!byCategory) return false;
+      if (!term) return true;
+      const haystack = `${inv.nombre} ${inv.ref} ${inv.categoria} ${inv.desc} ${inv.proveedor}`.toLowerCase();
+      return haystack.includes(term);
+    }).sort((a, b) => {
+      if (!term) return a.nombre.localeCompare(b.nombre, "es");
+
+      const getScore = (item: typeof inventory[number]) => {
+        const nombre = item.nombre.toLowerCase();
+        const referencia = item.ref.toLowerCase();
+        const categoria = item.categoria.toLowerCase();
+        if (nombre.startsWith(term)) return 0;
+        if (referencia.startsWith(term)) return 1;
+        if (nombre.includes(term)) return 2;
+        if (referencia.includes(term)) return 3;
+        if (categoria.includes(term)) return 4;
+        return 5;
+      };
+
+      return getScore(a) - getScore(b) || a.nombre.localeCompare(b.nombre, "es");
+    });
   }
 
   // ── Return ──
@@ -112,7 +159,7 @@ export default function ProyectosPage() {
           </div>
           <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
             <Btn variant="ghost" size="sm" onClick={()=>generateProjectPDF(project, projDispatches)}><FileText size={14}/> PDF</Btn>
-            <Btn variant="orange" size="sm" onClick={()=>{ setDispRows([emptyDispatchRow()]); setDispatch(true); }}><Truck size={14}/> Despachar</Btn>
+            <Btn variant="orange" size="sm" onClick={()=>{ setDispRows([emptyDispatchRow()]); setActiveDispatchRow(0); setDispatch(true); }}><Truck size={14}/> Despachar</Btn>
             <Btn variant="success" size="sm" onClick={()=>{ setRetForm({itemId:dispatchedItems[0]?.id||"",qty:0,resp:"",obs:""}); setReturn(true); }}><RotateCcw size={14}/> Devolver</Btn>
           </div>
         </div>
@@ -150,61 +197,172 @@ export default function ProyectosPage() {
           <div style={{ background:"var(--orange-glow)", border:"1px solid rgba(245,98,15,0.25)", borderRadius:8, padding:"10px 14px", marginBottom:18, fontSize:13, color:"var(--orange)", fontWeight:600 }}>
             📁 {project.nombre}
           </div>
-          {dispRows.map((row,i)=>(
-            <div key={i} style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14, marginBottom:16, paddingBottom:16, borderBottom: i<dispRows.length-1?"1px solid var(--border)":"none" }}>
-              <FormGroup label={`Material ${i>0?i+1:""}`} full>
-                <div style={{ display:"grid", gap:8 }}>
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1.2fr", gap:8 }}>
-                    <select
-                      value={row.materialCategory}
-                      onChange={(e)=>{ const r=[...dispRows]; r[i].materialCategory=e.target.value; setDispRows(r); }}
-                      style={fieldStyle}
-                    >
-                      <option value="all">Todas las categorías</option>
-                      {materialCategories.map((cat) => <option key={cat} value={cat}>{cat}</option>)}
-                    </select>
-                    <input
-                      value={row.materialQuery}
-                      onChange={(e)=>{ const r=[...dispRows]; r[i].materialQuery=e.target.value; setDispRows(r); }}
-                      placeholder="Buscar por nombre, referencia o especificación..."
-                      style={fieldStyle}
-                    />
-                  </div>
+          <div style={{ display:"grid", gap:12 }}>
+            {dispRows.map((row,i)=>{
+              const selectedItem = inventory.find((inv) => inv.id === row.itemId);
+              const filteredInventory = getFilteredInventory(row);
+              const isActive = activeDispatchRow === i;
+              const visibleResults = filteredInventory.slice(0, 6);
+              const showResults = isActive && (row.materialQuery.trim().length > 0 || row.materialCategory !== "all" || !selectedItem);
 
-                  <select value={row.itemId} onChange={(e)=>{ const r=[...dispRows]; r[i].itemId=e.target.value; setDispRows(r); }} style={fieldStyle}>
-                    <option value="">Seleccionar material...</option>
-                    {inventory
-                      .filter((inv) => {
-                        const byCategory = row.materialCategory === "all" || inv.categoria === row.materialCategory;
-                        if (!byCategory) return false;
-                        const term = row.materialQuery.trim().toLowerCase();
-                        if (!term) return true;
-                        const haystack = `${inv.nombre} ${inv.ref} ${inv.categoria} ${inv.desc} ${inv.proveedor}`.toLowerCase();
-                        return haystack.includes(term);
-                      })
-                      .map((inv)=><option key={inv.id} value={inv.id}>{inv.nombre} · {inv.ref || "Sin ref"} · {inv.categoria} (Stock: {inv.stock} {inv.unidad})</option>)}
-                  </select>
-
-                  {(() => {
-                    const selectedItem = inventory.find((inv) => inv.id === row.itemId);
-                    if (!selectedItem) return null;
-                    return (
-                      <div style={{ border:"1px solid var(--border)", borderRadius:8, padding:"8px 10px", background:"var(--bg2)", fontSize:12, color:"var(--text2)", display:"grid", gap:4 }}>
-                        <div style={{ color:"var(--text)", fontWeight:700 }}>Seleccionado: {selectedItem.nombre}</div>
-                        <div>Ref: {selectedItem.ref || "—"} · Categoría: {selectedItem.categoria || "—"}</div>
-                        <div>Disponible: {selectedItem.stock} {selectedItem.unidad} · Ubicación: {selectedItem.ubicacion || "—"}</div>
-                        <div><strong style={{ color:"var(--text)" }}>Especificaciones:</strong> {selectedItem.desc || "Sin especificaciones"}</div>
+              return (
+                <div key={i} style={{ border:"1px solid var(--border)", borderRadius:14, background:isActive ? "linear-gradient(180deg, rgba(255,255,255,0.02), rgba(245,98,15,0.03))" : "var(--bg2)", overflow:"hidden" }}>
+                  <button
+                    type="button"
+                    onClick={() => setActiveDispatchRow(i)}
+                    style={{ width:"100%", background:"transparent", border:"none", color:"inherit", cursor:"pointer", padding:"14px 16px", display:"flex", alignItems:"center", gap:12, textAlign:"left" }}
+                  >
+                    <div style={{ width:30, height:30, borderRadius:999, background:isActive ? "var(--orange)" : "var(--bg3)", color:isActive ? "white" : "var(--text2)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:700, flexShrink:0 }}>
+                      {i + 1}
+                    </div>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                        <span style={{ fontSize:13, fontWeight:700, color:"var(--text)" }}>
+                          {selectedItem ? selectedItem.nombre : `Material ${i + 1}`}
+                        </span>
+                        {selectedItem && <span style={{ fontSize:11, color:"var(--orange)" }}>{selectedItem.categoria || "Sin categoría"}</span>}
                       </div>
-                    );
-                  })()}
+                      <div style={{ fontSize:12, color:"var(--text2)", marginTop:3 }}>
+                        {selectedItem ? `${selectedItem.ref || "Sin referencia"} · ${row.qty || 0} ${selectedItem.unidad}` : "Selecciona el material y completa los datos"}
+                      </div>
+                    </div>
+                    <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                      {dispRows.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); removeDispatchRow(i); }}
+                          style={{ background:"var(--bg3)", border:"1px solid var(--border)", borderRadius:8, color:"var(--text2)", width:32, height:32, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer" }}
+                          title="Eliminar material"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                      {isActive ? <ChevronUp size={16} color="currentColor" /> : <ChevronDown size={16} color="currentColor" />}
+                    </div>
+                  </button>
+
+                  {isActive && (
+                    <div style={{ padding:"0 16px 16px", display:"grid", gap:14 }}>
+                      <div style={{ border:"1px solid rgba(245,98,15,0.22)", background:"rgba(245,98,15,0.06)", borderRadius:12, padding:12, display:"grid", gap:10 }}>
+                        <div style={{ display:"grid", gridTemplateColumns:"170px 1fr", gap:10 }}>
+                          <select
+                            value={row.materialCategory}
+                            onChange={(e)=>updateDispatchRow(i, { materialCategory:e.target.value })}
+                            style={{ ...fieldStyle, background:"var(--bg2)", borderRadius:12 }}
+                          >
+                            <option value="all">Categorías</option>
+                            {materialCategories.map((cat) => <option key={cat} value={cat}>{cat}</option>)}
+                          </select>
+                          <div style={{ position:"relative" }}>
+                            <Search size={15} style={{ position:"absolute", left:14, top:"50%", transform:"translateY(-50%)", color:"var(--text2)" }} />
+                            <input
+                              value={row.materialQuery}
+                              onChange={(e)=>updateDispatchRow(i, { materialQuery:e.target.value, itemId: row.itemId && selectedItem?.nombre === row.materialQuery ? "" : row.itemId })}
+                              placeholder="Escribe el nombre del producto o la referencia"
+                              style={{ ...fieldStyle, paddingLeft:40, background:"var(--bg2)", borderRadius:12, fontSize:14, paddingTop:12, paddingBottom:12 }}
+                            />
+                          </div>
+                        </div>
+
+                        {showResults ? (
+                          <div style={{ border:"1px solid rgba(255,255,255,0.08)", borderRadius:12, background:"rgba(8,8,8,0.24)", padding:8, display:"grid", gap:8 }}>
+                            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:10, flexWrap:"wrap", fontSize:12, color:"var(--text2)", padding:"2px 4px" }}>
+                              <span>{filteredInventory.length} resultado{filteredInventory.length === 1 ? "" : "s"}</span>
+                              <span>Haz clic para agregarlo al despacho</span>
+                            </div>
+
+                            <div style={{ display:"grid", gap:8, maxHeight:260, overflowY:"auto", paddingRight:4 }}>
+                              {visibleResults.length === 0 ? (
+                                <div style={{ border:"1px dashed var(--border)", borderRadius:10, padding:"16px 14px", color:"var(--text2)", fontSize:12, textAlign:"center" }}>
+                                  No hay materiales que coincidan con esa búsqueda.
+                                </div>
+                              ) : (
+                                visibleResults.map((inv) => {
+                                  const active = row.itemId === inv.id;
+                                  return (
+                                    <button
+                                      key={inv.id}
+                                      type="button"
+                                      onClick={() => updateDispatchRow(i, { itemId:inv.id, materialQuery:inv.nombre })}
+                                      style={{
+                                        background: active ? "linear-gradient(135deg, rgba(245,98,15,0.22), rgba(245,98,15,0.10))" : "var(--bg2)",
+                                        border: active ? "1px solid rgba(245,98,15,0.45)" : "1px solid var(--border)",
+                                        borderRadius:14,
+                                        padding:"12px 13px",
+                                        color:"var(--text)",
+                                        textAlign:"left",
+                                        cursor:"pointer",
+                                        display:"grid",
+                                        gap:6,
+                                        boxShadow: active ? "0 8px 24px rgba(245,98,15,0.10)" : "none",
+                                      }}
+                                    >
+                                      <div style={{ display:"flex", alignItems:"center", gap:8, justifyContent:"space-between" }}>
+                                        <strong style={{ fontSize:13 }}>{inv.nombre}</strong>
+                                        <span style={{ fontSize:11, color: active ? "var(--orange)" : "var(--text2)" }}>{inv.stock} {inv.unidad}</span>
+                                      </div>
+                                      <div style={{ display:"flex", gap:8, flexWrap:"wrap", fontSize:11, color:"var(--text2)" }}>
+                                        <span>{inv.categoria || "Sin categoría"}</span>
+                                        <span>{inv.ref || "Sin referencia"}</span>
+                                        <span>{inv.ubicacion || "Sin ubicación"}</span>
+                                      </div>
+                                      <div style={{ fontSize:11, color:"var(--text2)", lineHeight:1.4 }}>
+                                        {inv.desc || "Sin especificaciones registradas"}
+                                      </div>
+                                    </button>
+                                  );
+                                })
+                              )}
+                            </div>
+                          </div>
+                        ) : (
+                          <div style={{ fontSize:12, color:"var(--text2)", padding:"4px 2px 0" }}>
+                            Escribe el nombre del material para verlo y agregarlo rápidamente.
+                          </div>
+                        )}
+                      </div>
+
+                      {selectedItem && (
+                        <div style={{ border:"1px solid var(--border)", borderRadius:12, background:"var(--bg2)", padding:"12px 14px", display:"grid", gap:8 }}>
+                          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:10, flexWrap:"wrap" }}>
+                            <strong style={{ fontSize:13, color:"var(--text)" }}>{selectedItem.nombre}</strong>
+                            <span style={{ fontSize:11, color:"var(--orange)" }}>Disponible: {selectedItem.stock} {selectedItem.unidad}</span>
+                          </div>
+                          <div style={{ fontSize:12, color:"var(--text2)", display:"flex", gap:10, flexWrap:"wrap" }}>
+                            <span>Ref: {selectedItem.ref || "—"}</span>
+                            <span>Categoría: {selectedItem.categoria || "—"}</span>
+                            <span>Ubicación: {selectedItem.ubicacion || "—"}</span>
+                          </div>
+                          <div style={{ fontSize:12, color:"var(--text2)", lineHeight:1.45 }}>
+                            <strong style={{ color:"var(--text)" }}>Especificaciones:</strong> {selectedItem.desc || " Sin especificaciones"}
+                          </div>
+                        </div>
+                      )}
+
+                      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
+                        <FormGroup label="Cantidad">
+                          <input type="number" min={1} value={row.qty||""} onChange={(e)=>updateDispatchRow(i, { qty:+e.target.value })} style={fieldStyle} />
+                        </FormGroup>
+                        <FormGroup label="Responsable">
+                          <input value={row.resp} onChange={(e)=>updateDispatchRow(i, { resp:e.target.value })} placeholder="Nombre" style={fieldStyle} />
+                        </FormGroup>
+                        <FormGroup label="Observaciones" full>
+                          <textarea value={row.obs} onChange={(e)=>updateDispatchRow(i, { obs:e.target.value })} placeholder="Notas del despacho..." style={{ ...fieldStyle, minHeight:74, resize:"vertical" }} />
+                        </FormGroup>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </FormGroup>
-              <FormGroup label="Cantidad"><input type="number" min={1} value={row.qty||""} onChange={(e)=>{ const r=[...dispRows]; r[i].qty=+e.target.value; setDispRows(r); }} style={fieldStyle} /></FormGroup>
-              <FormGroup label="Responsable"><input value={row.resp} onChange={(e)=>{ const r=[...dispRows]; r[i].resp=e.target.value; setDispRows(r); }} placeholder="Nombre" style={fieldStyle} /></FormGroup>
-              <FormGroup label="Observaciones"><input value={row.obs} onChange={(e)=>{ const r=[...dispRows]; r[i].obs=e.target.value; setDispRows(r); }} placeholder="Notas..." style={fieldStyle} /></FormGroup>
+              );
+            })}
+          </div>
+
+          <div style={{ display:"flex", justifyContent:"space-between", gap:10, marginTop:14, flexWrap:"wrap" }}>
+            <div style={{ fontSize:12, color:"var(--text2)" }}>
+              Al agregar otro material, el anterior queda resumido para que el formulario no se haga largo.
             </div>
-          ))}
-          <Btn variant="ghost" size="sm" onClick={()=>setDispRows([...dispRows, emptyDispatchRow()])}>+ Agregar otro material</Btn>
+            <Btn variant="ghost" size="sm" onClick={()=>{ const nextIndex = dispRows.length; setDispRows([...dispRows, emptyDispatchRow()]); setActiveDispatchRow(nextIndex); }}>+ Agregar otro material</Btn>
+          </div>
         </Modal>
 
         {/* Return Modal */}
