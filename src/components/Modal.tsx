@@ -1,7 +1,7 @@
 "use client";
-import { useEffect, ReactNode, useState } from "react";
-import { createPortal } from "react-dom";
 import { X } from "lucide-react";
+import { ReactNode, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 interface ModalProps {
   open: boolean;

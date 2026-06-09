@@ -1,4 +1,4 @@
-import type { Project, Dispatch, Material } from "@/store/useStore";
+import type { Project, Dispatch, Material, CompanyTool, ToolAssignment, Technician } from "@/store/useStore";
 import { getStockStatus } from "@/store/useStore";
 
 // Dynamic import of jsPDF so it only runs client-side
@@ -241,4 +241,266 @@ export async function generateCriticalPDF(inventory: Material[]) {
   addFooter(doc);
   doc.save("TESOCOL_StockCritico.pdf");
   return true;
+}
+
+// ─── Herramientas PDF ─────────────────────────────────────────────────────────
+export async function generateHerramientasPDF(
+  tools: CompanyTool[],
+  technicians: Technician[],
+  assignments: ToolAssignment[]
+) {
+  const JsPDF = await getJsPDF();
+  const doc = new JsPDF();
+  addHeader(doc, "REPORTE DE HERRAMIENTAS");
+
+  const fecha = new Date().toLocaleString("es-CO");
+  const disponibles = tools.filter((t) => t.estado === "disponible").length;
+  const asignadas   = tools.filter((t) => t.estado === "asignada").length;
+  const activos     = assignments.filter((a) => a.estado === "activa").length;
+
+  doc.setFontSize(9);
+  doc.setTextColor(150);
+  doc.setFont("helvetica", "normal");
+  doc.text(`Generado: ${fecha}`, 14, 48);
+  doc.text(`Total: ${tools.length}   Disponibles: ${disponibles}   Prestadas: ${asignadas}   Prestamos activos: ${activos}`, 14, 55);
+
+  // ── Tabla herramientas ──
+  let y = 66;
+  doc.setFillColor(245, 98, 15);
+  doc.rect(14, y, 182, 8, "F");
+  doc.setTextColor(255);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.5);
+  const hCols = [14, 60, 92, 122, 148, 170];
+  ["Herramienta", "Categoria", "Marca", "Cantidad", "Ubicacion", "Estado"].forEach(
+    (h, i) => doc.text(h, hCols[i], y + 5.5)
+  );
+  y += 10;
+
+  tools.forEach((tool, idx) => {
+    if (y > 268) { doc.addPage(); y = 20; }
+    doc.setFillColor(idx % 2 === 0 ? 248 : 255, 248, 248);
+    doc.rect(14, y, 182, 8, "F");
+    doc.setTextColor(40);
+    doc.setFont("helvetica", "normal");
+    doc.text(tool.nombre.slice(0, 24), hCols[0], y + 5.5);
+    doc.text((tool.categoria || "-").slice(0, 16), hCols[1], y + 5.5);
+    doc.text((tool.marca || "-").slice(0, 14), hCols[2], y + 5.5);
+    doc.text((tool.cantidad || "-").slice(0, 10), hCols[3], y + 5.5);
+    doc.text((tool.ubicacion || "-").slice(0, 14), hCols[4], y + 5.5);
+    const estadoColors: Record<string, [number, number, number]> = {
+      disponible:    [34, 197, 94],
+      asignada:      [245, 98, 15],
+      mantenimiento: [245, 158, 11],
+      baja:          [239, 68, 68],
+    };
+    const estadoLabels: Record<string, string> = {
+      disponible: "Disponible", asignada: "Asignada",
+      mantenimiento: "Mantenim.", baja: "Baja",
+    };
+    doc.setTextColor(...(estadoColors[tool.estado] ?? [100, 100, 100]));
+    doc.setFont("helvetica", "bold");
+    doc.text(estadoLabels[tool.estado] ?? tool.estado, hCols[5], y + 5.5);
+    doc.setTextColor(40);
+    doc.setFont("helvetica", "normal");
+    y += 9;
+  });
+
+  if (!tools.length) {
+    doc.setTextColor(150);
+    doc.text("Sin herramientas registradas.", 14, y + 10);
+    y += 20;
+  }
+
+  // ── Prestamos activos ──
+  const activas = assignments.filter((a) => a.estado === "activa");
+  if (activas.length > 0) {
+    y += 14;
+    if (y > 250) { doc.addPage(); y = 20; }
+
+    doc.setFillColor(30, 30, 30);
+    doc.rect(14, y, 182, 7, "F");
+    doc.setTextColor(245, 98, 15);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.text("PRESTAMOS ACTIVOS", 14, y + 5);
+    y += 11;
+
+    doc.setFillColor(245, 98, 15);
+    doc.rect(14, y, 182, 8, "F");
+    doc.setTextColor(255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    const aCols = [14, 72, 130, 168];
+    ["Tecnico", "Herramienta", "Fecha entrega", "Obs."].forEach(
+      (h, i) => doc.text(h, aCols[i], y + 5.5)
+    );
+    y += 10;
+
+    activas.forEach((a, idx) => {
+      if (y > 268) { doc.addPage(); y = 20; }
+      doc.setFillColor(idx % 2 === 0 ? 248 : 255, 248, 248);
+      doc.rect(14, y, 182, 8, "F");
+      doc.setTextColor(40);
+      doc.setFont("helvetica", "normal");
+      doc.text(a.technicianNombre.slice(0, 26), aCols[0], y + 5.5);
+      doc.text(a.toolNombre.slice(0, 26), aCols[1], y + 5.5);
+      doc.text((a.fechaEntrega || "-").slice(0, 18), aCols[2], y + 5.5);
+      doc.text((a.observaciones || "-").slice(0, 16), aCols[3], y + 5.5);
+      y += 9;
+    });
+  }
+
+  // Firma
+  y += 20;
+  if (y > 250) { doc.addPage(); y = 20; }
+  doc.setDrawColor(245, 98, 15);
+  doc.setLineWidth(0.5);
+  doc.line(14, y, 196, y);
+  y += 12;
+  doc.setTextColor(40);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.text("FIRMA RESPONSABLE DE BODEGA:", 14, y);
+  doc.setFont("helvetica", "normal");
+  doc.text("_______________________________", 14, y + 14);
+
+  addFooter(doc);
+  const dateSuffix = new Date().toLocaleDateString("es-CO").replace(/\//g, "-");
+  doc.save(`TESOCOL_Herramientas_${dateSuffix}.pdf`);
+}
+
+// ─── PDF individual por tecnico ──────────────────────────────────────────────
+export async function generateTecnicoHerramientasPDF(params: {
+  tecnicoNombre: string;
+  tecnicoCargo?: string;
+  tecnicoTelefono?: string;
+  herramientasTecnico: Array<{ nombre: string; cantidad: string; marca: string; notas: string }>;
+  herramientasEmpresaAsignadas: Array<{ toolNombre: string; fechaEntrega: string; observaciones: string }>;
+}) {
+  const JsPDF = await getJsPDF();
+  const doc = new JsPDF();
+  addHeader(doc, "ACTA DE HERRAMIENTAS POR TECNICO");
+
+  doc.setFontSize(10);
+  doc.setTextColor(40);
+  const fields: [string, string][] = [
+    ["Tecnico:", params.tecnicoNombre],
+    ["Cargo:", params.tecnicoCargo || "—"],
+    ["Telefono:", params.tecnicoTelefono || "—"],
+    ["Fecha:", new Date().toLocaleString("es-CO")],
+  ];
+
+  fields.forEach(([label, value], i) => {
+    const y = 46 + i * 7;
+    doc.setFont("helvetica", "bold");
+    doc.text(label, 14, y);
+    doc.setFont("helvetica", "normal");
+    doc.text(value, 42, y);
+  });
+
+  let y = 78;
+  doc.setFillColor(30, 30, 30);
+  doc.rect(14, y, 182, 7, "F");
+  doc.setTextColor(245, 98, 15);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.text("HERRAMIENTAS DEL TECNICO", 14, y + 5);
+  y += 11;
+
+  doc.setFillColor(245, 98, 15);
+  doc.rect(14, y, 182, 8, "F");
+  doc.setTextColor(255);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.5);
+  const tCols = [14, 78, 110, 142];
+  ["Herramienta", "Cantidad", "Marca", "Notas"].forEach((h, i) => doc.text(h, tCols[i], y + 5.5));
+  y += 10;
+
+  if (!params.herramientasTecnico.length) {
+    doc.setTextColor(150);
+    doc.setFont("helvetica", "normal");
+    doc.text("Sin herramientas propias registradas para este tecnico.", 14, y + 6);
+    y += 14;
+  } else {
+    params.herramientasTecnico.forEach((tool, idx) => {
+      if (y > 268) { doc.addPage(); y = 20; }
+      doc.setFillColor(idx % 2 === 0 ? 248 : 255, 248, 248);
+      doc.rect(14, y, 182, 8, "F");
+      doc.setTextColor(40);
+      doc.setFont("helvetica", "normal");
+      doc.text((tool.nombre || "-").slice(0, 28), tCols[0], y + 5.5);
+      doc.text((tool.cantidad || "-").slice(0, 10), tCols[1], y + 5.5);
+      doc.text((tool.marca || "-").slice(0, 14), tCols[2], y + 5.5);
+      doc.text((tool.notas || "-").slice(0, 20), tCols[3], y + 5.5);
+      y += 9;
+    });
+  }
+
+  y += 8;
+  if (y > 250) { doc.addPage(); y = 20; }
+  doc.setFillColor(30, 30, 30);
+  doc.rect(14, y, 182, 7, "F");
+  doc.setTextColor(245, 98, 15);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.text("HERRAMIENTAS DE EMPRESA ASIGNADAS", 14, y + 5);
+  y += 11;
+
+  doc.setFillColor(245, 98, 15);
+  doc.rect(14, y, 182, 8, "F");
+  doc.setTextColor(255);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.5);
+  const eCols = [14, 90, 130, 166];
+  ["Herramienta", "Entrega", "Estado", "Obs."].forEach((h, i) => doc.text(h, eCols[i], y + 5.5));
+  y += 10;
+
+  if (!params.herramientasEmpresaAsignadas.length) {
+    doc.setTextColor(150);
+    doc.setFont("helvetica", "normal");
+    doc.text("Sin herramientas activas de empresa para este tecnico.", 14, y + 6);
+    y += 14;
+  } else {
+    params.herramientasEmpresaAsignadas.forEach((asig, idx) => {
+      if (y > 268) { doc.addPage(); y = 20; }
+      doc.setFillColor(idx % 2 === 0 ? 248 : 255, 248, 248);
+      doc.rect(14, y, 182, 8, "F");
+      doc.setTextColor(40);
+      doc.setFont("helvetica", "normal");
+      doc.text((asig.toolNombre || "-").slice(0, 28), eCols[0], y + 5.5);
+      doc.text((asig.fechaEntrega || "-").slice(0, 18), eCols[1], y + 5.5);
+      doc.setTextColor(245, 98, 15);
+      doc.setFont("helvetica", "bold");
+      doc.text("Activa", eCols[2], y + 5.5);
+      doc.setTextColor(40);
+      doc.setFont("helvetica", "normal");
+      doc.text((asig.observaciones || "-").slice(0, 16), eCols[3], y + 5.5);
+      y += 9;
+    });
+  }
+
+  y += 20;
+  if (y > 250) { doc.addPage(); y = 20; }
+  doc.setDrawColor(245, 98, 15);
+  doc.setLineWidth(0.5);
+  doc.line(14, y, 196, y);
+  y += 12;
+  doc.setTextColor(40);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.text("FIRMA DEL TECNICO:", 14, y);
+  doc.setFont("helvetica", "normal");
+  doc.text("_______________________________", 14, y + 14);
+  doc.text(params.tecnicoNombre, 14, y + 21);
+
+  doc.setFont("helvetica", "bold");
+  doc.text("FIRMA RESPONSABLE BODEGA:", 115, y);
+  doc.setFont("helvetica", "normal");
+  doc.text("_______________________________", 115, y + 14);
+
+  addFooter(doc);
+  const dateSuffix = new Date().toLocaleDateString("es-CO").replace(/\//g, "-");
+  const tecnicoSlug = params.tecnicoNombre.replace(/[^a-z0-9]/gi, "_");
+  doc.save(`TESOCOL_Tecnico_${tecnicoSlug}_${dateSuffix}.pdf`);
 }

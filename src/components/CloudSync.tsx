@@ -20,6 +20,10 @@ export default function CloudSync() {
   const projects = useStore((s) => s.projects);
   const dispatches = useStore((s) => s.dispatches);
   const movements = useStore((s) => s.movements);
+  const technicians = useStore((s) => s.technicians);
+  const companyTools = useStore((s) => s.companyTools);
+  const toolAssignments = useStore((s) => s.toolAssignments);
+  const technicianTools = useStore((s) => s.technicianTools);
   const setAppData = useStore((s) => s.setAppData);
 
   const readyToSyncRef = useRef(false);
@@ -77,6 +81,10 @@ export default function CloudSync() {
       projects,
       dispatches,
       movements,
+      technicians,
+      companyTools,
+      toolAssignments,
+      technicianTools,
     });
 
     // Only sync if data has actually changed
@@ -90,7 +98,7 @@ export default function CloudSync() {
     }
 
     syncTimeoutRef.current = setTimeout(() => {
-      syncAppStateToFirestore({ inventory, projects, dispatches, movements }).catch((error) => {
+      syncAppStateToFirestore({ inventory, projects, dispatches, movements, technicians, companyTools, toolAssignments, technicianTools }).catch((error) => {
         console.error("No fue posible sincronizar estado con Firestore", error);
         if (!syncErrorShownRef.current) {
           syncErrorShownRef.current = true;
@@ -105,7 +113,7 @@ export default function CloudSync() {
         clearTimeout(syncTimeoutRef.current);
       }
     };
-  }, [inventory, projects, dispatches, movements, toast]);
+  }, [inventory, projects, dispatches, movements, technicians, companyTools, toolAssignments, technicianTools, toast]);
 
   return null;
 }

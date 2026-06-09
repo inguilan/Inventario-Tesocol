@@ -52,11 +52,60 @@ export interface Movement {
   fecha: string;
 }
 
+export interface Technician {
+  id: string;
+  nombre: string;
+  cargo: string;
+  telefono: string;
+  notas: string;
+  activo: boolean;
+  fechaRegistro: string;
+}
+
+export interface CompanyTool {
+  id: string;
+  nombre: string;
+  categoria: string;
+  marca: string;
+  cantidad: string;
+  estado: "disponible" | "asignada" | "mantenimiento" | "regular" | "baja";
+  ubicacion: string;
+  notas: string;
+  fechaRegistro: string;
+}
+
+export interface TechnicianTool {
+  id: string;
+  technicianId: string;
+  technicianNombre: string;
+  nombre: string;
+  cantidad: string;
+  marca: string;
+  notas: string;
+  fechaRegistro: string;
+}
+
+export interface ToolAssignment {
+  id: string;
+  technicianId: string;
+  technicianNombre: string;
+  toolId: string;
+  toolNombre: string;
+  fechaEntrega: string;
+  fechaDevolucion?: string;
+  estado: "activa" | "devuelta";
+  observaciones: string;
+}
+
 export interface AppDataSnapshot {
   inventory: Material[];
   projects: Project[];
   dispatches: Dispatch[];
   movements: Movement[];
+  technicians: Technician[];
+  companyTools: CompanyTool[];
+  toolAssignments: ToolAssignment[];
+  technicianTools: TechnicianTool[];
 }
 
 // ─── Store ────────────────────────────────────────────────────────────────────
@@ -66,6 +115,10 @@ interface AppState {
   projects: Project[];
   dispatches: Dispatch[];
   movements: Movement[];
+  technicians: Technician[];
+  companyTools: CompanyTool[];
+  toolAssignments: ToolAssignment[];
+  technicianTools: TechnicianTool[];
   setAppData: (data: AppDataSnapshot) => void;
   // Inventory actions
   addMaterial: (m: Omit<Material, "id" | "fechaCreacion">) => void;
@@ -79,6 +132,17 @@ interface AppState {
   addDispatch: (d: Omit<Dispatch, "id" | "fecha">) => void;
   addReturn: (d: Omit<Dispatch, "id" | "fecha" | "tipo">) => void;
   updateDispatch: (id: string, d: Partial<Dispatch>) => void;
+  addTechnician: (t: Omit<Technician, "id" | "fechaRegistro">) => void;
+  updateTechnician: (id: string, t: Partial<Technician>) => void;
+  deleteTechnician: (id: string) => void;
+  addCompanyTool: (t: Omit<CompanyTool, "id" | "fechaRegistro">) => void;
+  updateCompanyTool: (id: string, t: Partial<CompanyTool>) => void;
+  deleteCompanyTool: (id: string) => void;
+  addTechnicianTool: (t: Omit<TechnicianTool, "id" | "fechaRegistro" | "technicianNombre">) => void;
+  updateTechnicianTool: (id: string, t: Partial<Omit<TechnicianTool, "id" | "fechaRegistro" | "technicianId" | "technicianNombre">>) => void;
+  deleteTechnicianTool: (id: string) => void;
+  assignTool: (a: Omit<ToolAssignment, "id" | "fechaEntrega" | "fechaDevolucion" | "estado">) => void;
+  returnAssignedTool: (assignmentId: string, observaciones?: string) => void;
 }
 
 function uid() {
@@ -90,12 +154,20 @@ export const useStore = create<AppState>()((set, get) => ({
       projects: [],
       dispatches: [],
       movements: [],
+      technicians: [],
+      companyTools: [],
+      toolAssignments: [],
+      technicianTools: [],
       setAppData: (data) =>
         set(() => ({
           inventory: data.inventory,
           projects: data.projects,
           dispatches: data.dispatches,
           movements: data.movements,
+          technicians: data.technicians ?? [],
+          companyTools: data.companyTools ?? [],
+          toolAssignments: data.toolAssignments ?? [],
+          technicianTools: data.technicianTools ?? [],
         })),
 
       addMaterial: (m) => {
@@ -161,6 +233,114 @@ export const useStore = create<AppState>()((set, get) => ({
         set((s) => ({
           dispatches: s.dispatches.map((x) => (x.id === id ? next : x)),
           inventory: s.inventory.map((i) => (i.id === prev.itemId ? { ...i, stock: stockAdjusted } : i)),
+        }));
+      },
+
+      addTechnician: (t) => {
+        const technician: Technician = {
+          ...t,
+          id: uid(),
+          fechaRegistro: new Date().toLocaleDateString("es-CO"),
+        };
+        set((s) => ({ technicians: [...s.technicians, technician] }));
+      },
+
+      updateTechnician: (id, t) =>
+        set((s) => ({ technicians: s.technicians.map((tech) => (tech.id === id ? { ...tech, ...t } : tech)) })),
+
+      deleteTechnician: (id) => {
+        const activeAssignment = get().toolAssignments.find((assignment) => assignment.technicianId === id && assignment.estado === "activa");
+        if (activeAssignment) throw new Error("No puedes eliminar un tecnico con herramientas activas");
+        set((s) => ({
+          technicians: s.technicians.filter((tech) => tech.id !== id),
+          technicianTools: s.technicianTools.filter((tool) => tool.technicianId !== id),
+        }));
+      },
+
+      addCompanyTool: (t) => {
+        const tool: CompanyTool = {
+          ...t,
+          id: uid(),
+          fechaRegistro: new Date().toLocaleDateString("es-CO"),
+        };
+        set((s) => ({ companyTools: [...s.companyTools, tool] }));
+      },
+
+      updateCompanyTool: (id, t) =>
+        set((s) => ({ companyTools: s.companyTools.map((tool) => (tool.id === id ? { ...tool, ...t } : tool)) })),
+
+      deleteCompanyTool: (id) => {
+        const activeAssignment = get().toolAssignments.find((assignment) => assignment.toolId === id && assignment.estado === "activa");
+        if (activeAssignment) throw new Error("No puedes eliminar una herramienta asignada");
+        set((s) => ({ companyTools: s.companyTools.filter((tool) => tool.id !== id) }));
+      },
+
+      addTechnicianTool: (t) => {
+        const technician = get().technicians.find((tech) => tech.id === t.technicianId);
+        if (!technician) throw new Error("Tecnico no encontrado");
+
+        const tool: TechnicianTool = {
+          ...t,
+          technicianNombre: technician.nombre,
+          id: uid(),
+          fechaRegistro: new Date().toLocaleDateString("es-CO"),
+        };
+
+        set((s) => ({ technicianTools: [...s.technicianTools, tool] }));
+      },
+
+      updateTechnicianTool: (id, t) =>
+        set((s) => ({
+          technicianTools: s.technicianTools.map((tool) =>
+            tool.id === id ? { ...tool, ...t } : tool
+          ),
+        })),
+
+      deleteTechnicianTool: (id) =>
+        set((s) => ({ technicianTools: s.technicianTools.filter((tool) => tool.id !== id) })),
+
+      assignTool: (a) => {
+        const technician = get().technicians.find((tech) => tech.id === a.technicianId);
+        const tool = get().companyTools.find((item) => item.id === a.toolId);
+
+        if (!technician || !technician.activo) throw new Error("Tecnico no valido o inactivo");
+        if (!tool) throw new Error("Herramienta no encontrada");
+        if (tool.estado !== "disponible") throw new Error("La herramienta no esta disponible para entrega");
+
+        const assignment: ToolAssignment = {
+          ...a,
+          id: uid(),
+          fechaEntrega: new Date().toLocaleString("es-CO"),
+          estado: "activa",
+        };
+
+        set((s) => ({
+          toolAssignments: [...s.toolAssignments, assignment],
+          companyTools: s.companyTools.map((item) =>
+            item.id === a.toolId ? { ...item, estado: "asignada" } : item
+          ),
+        }));
+      },
+
+      returnAssignedTool: (assignmentId, observaciones) => {
+        const assignment = get().toolAssignments.find((item) => item.id === assignmentId);
+        if (!assignment) throw new Error("Asignacion no encontrada");
+        if (assignment.estado === "devuelta") throw new Error("La herramienta ya fue devuelta");
+
+        set((s) => ({
+          toolAssignments: s.toolAssignments.map((item) =>
+            item.id === assignmentId
+              ? {
+                  ...item,
+                  estado: "devuelta",
+                  fechaDevolucion: new Date().toLocaleString("es-CO"),
+                  observaciones: observaciones?.trim() ? observaciones : item.observaciones,
+                }
+              : item
+          ),
+          companyTools: s.companyTools.map((tool) =>
+            tool.id === assignment.toolId ? { ...tool, estado: "disponible" } : tool
+          ),
         }));
       },
     })

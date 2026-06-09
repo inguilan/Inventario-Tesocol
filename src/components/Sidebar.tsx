@@ -1,11 +1,13 @@
 "use client";
-import { Download, FileText, FolderOpen, LayoutDashboard, Package, Sun, Truck } from "lucide-react";
+import { Download, FileText, FolderOpen, Hammer, LayoutDashboard, Package, Sun, Truck, Wrench } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 
 const NAV = [
   { href: "/dashboard",   label: "Dashboard",       icon: LayoutDashboard, section: "Principal" },
   { href: "/inventario",  label: "Inventario",       icon: Package },
+  { href: "/herramientas?mod=empresa",  label: "Herram. Empresa",   icon: Hammer },
+  { href: "/herramientas?mod=tecnicos", label: "Tecnicos Herram.",  icon: Wrench },
   { href: "/proyectos",   label: "Proyectos / Obras",icon: FolderOpen },
   { href: "/despachos",   label: "Despachos",        icon: Truck },
   { href: "/reportes",    label: "Reportes PDF",     icon: FileText,  section: "Reportes" },
@@ -14,6 +16,8 @@ const NAV = [
 
 export default function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => void }) {
   const path = usePathname();
+  const searchParams = useSearchParams();
+  const currentMod = searchParams.get("mod") || "empresa";
 
   return (
     <aside
@@ -39,7 +43,14 @@ export default function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose
       {/* Nav */}
       <nav style={{ padding: "14px 10px", flex: 1, overflowY: "auto" }}>
         {NAV.map((item) => {
-          const active = path === item.href || (item.href !== "/dashboard" && path.startsWith(item.href));
+          const [baseHref, queryString] = item.href.split("?");
+          const query = new URLSearchParams(queryString || "");
+          const itemMod = query.get("mod");
+
+          let active = path === baseHref || (baseHref !== "/dashboard" && path.startsWith(baseHref));
+          if (itemMod) {
+            active = active && currentMod === itemMod;
+          }
           const Icon = item.icon;
           return (
             <div key={item.href}>

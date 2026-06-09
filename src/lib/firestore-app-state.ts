@@ -1,6 +1,6 @@
 import { collection, deleteDoc, doc, getDocs, getFirestore, setDoc, writeBatch } from "firebase/firestore";
 import { firebaseApp } from "@/lib/firebase";
-import type { AppDataSnapshot } from "@/store/useStore";
+import type { AppDataSnapshot, CompanyTool } from "@/store/useStore";
 
 const TESOCOL_COLLECTION = "tesocol";
 
@@ -10,6 +10,10 @@ const SUBCOLLECTIONS = {
   PROYECTOS: "proyectos",
   DESPACHOS: "despachos",
   MOVIMIENTOS: "movimientos",
+  TECNICOS: "tecnicos",
+  HERRAMIENTAS_EMPRESA: "herramientasEmpresa",
+  ENTREGAS_HERRAMIENTAS: "entregasHerramientas",
+  HERRAMIENTAS_TECNICOS: "herramientasTecnicos",
 };
 
 const EMPTY_SNAPSHOT: AppDataSnapshot = {
@@ -17,6 +21,10 @@ const EMPTY_SNAPSHOT: AppDataSnapshot = {
   projects: [],
   dispatches: [],
   movements: [],
+  technicians: [],
+  companyTools: [],
+  toolAssignments: [],
+  technicianTools: [],
 };
 
 function getDb() {
@@ -30,16 +38,27 @@ function getTesocolRef() {
   return doc(getDb(), TESOCOL_COLLECTION, "config");
 }
 
+function normalizeCompanyTool(raw: any): CompanyTool {
+  return {
+    ...raw,
+    cantidad: raw?.cantidad ?? raw?.serial ?? "",
+  } as CompanyTool;
+}
+
 export async function loadAppStateFromFirestore(): Promise<AppDataSnapshot> {
   const db = getDb();
   
   try {
     // Load all subcollections in parallel with Promise.all
-    const [materialesSnap, proyectosSnap, despachosDocs, movimientosSnap] = await Promise.all([
+    const [materialesSnap, proyectosSnap, despachosDocs, movimientosSnap, tecnicosSnap, herramientasSnap, entregasSnap, herramientasTecnicosSnap] = await Promise.all([
       getDocs(collection(db, TESOCOL_COLLECTION, "config", SUBCOLLECTIONS.MATERIALES)),
       getDocs(collection(db, TESOCOL_COLLECTION, "config", SUBCOLLECTIONS.PROYECTOS)),
       getDocs(collection(db, TESOCOL_COLLECTION, "config", SUBCOLLECTIONS.DESPACHOS)),
       getDocs(collection(db, TESOCOL_COLLECTION, "config", SUBCOLLECTIONS.MOVIMIENTOS)),
+      getDocs(collection(db, TESOCOL_COLLECTION, "config", SUBCOLLECTIONS.TECNICOS)),
+      getDocs(collection(db, TESOCOL_COLLECTION, "config", SUBCOLLECTIONS.HERRAMIENTAS_EMPRESA)),
+      getDocs(collection(db, TESOCOL_COLLECTION, "config", SUBCOLLECTIONS.ENTREGAS_HERRAMIENTAS)),
+      getDocs(collection(db, TESOCOL_COLLECTION, "config", SUBCOLLECTIONS.HERRAMIENTAS_TECNICOS)),
     ]);
 
     return {
@@ -47,6 +66,10 @@ export async function loadAppStateFromFirestore(): Promise<AppDataSnapshot> {
       projects: proyectosSnap.docs.map((d) => d.data() as any),
       dispatches: despachosDocs.docs.map((d) => d.data() as any),
       movements: movimientosSnap.docs.map((d) => d.data() as any),
+      technicians: tecnicosSnap.docs.map((d) => d.data() as any),
+      companyTools: herramientasSnap.docs.map((d) => normalizeCompanyTool(d.data())),
+      toolAssignments: entregasSnap.docs.map((d) => d.data() as any),
+      technicianTools: herramientasTecnicosSnap.docs.map((d) => d.data() as any),
     };
   } catch (error) {
     console.warn("No se pudieron cargar colecciones, retornando snapshot vacío", error);
@@ -130,6 +153,70 @@ export async function syncAppStateToFirestore(snapshot: AppDataSnapshot): Promis
   snapshot.movements.forEach((mov, idx) => {
     const ref = doc(db, TESOCOL_COLLECTION, "config", SUBCOLLECTIONS.MOVIMIENTOS, `${mov.fecha}-${idx}`);
     batch.set(ref, mov, { merge: true });
+  });
+
+  // ─── TECNICOS ────────────────────────────────────────────────
+  const currentTechnicianIds = new Set(snapshot.technicians.map((tech) => tech.id));
+  const tecnicosCol = collection(db, TESOCOL_COLLECTION, "config", SUBCOLLECTIONS.TECNICOS);
+  const existingTecnicos = await getDocs(tecnicosCol);
+
+  snapshot.technicians.forEach((tech) => {
+    const ref = doc(db, TESOCOL_COLLECTION, "config", SUBCOLLECTIONS.TECNICOS, tech.id);
+    batch.set(ref, tech, { merge: true });
+  });
+
+  existingTecnicos.docs.forEach((doc) => {
+    if (!currentTechnicianIds.has(doc.id)) {
+      batch.delete(doc.ref);
+    }
+  });
+
+  // ─── HERRAMIENTAS EMPRESA ────────────────────────────────────
+  const currentToolIds = new Set(snapshot.companyTools.map((tool) => tool.id));
+  const herramientasCol = collection(db, TESOCOL_COLLECTION, "config", SUBCOLLECTIONS.HERRAMIENTAS_EMPRESA);
+  const existingHerramientas = await getDocs(herramientasCol);
+
+  snapshot.companyTools.forEach((tool) => {
+    const ref = doc(db, TESOCOL_COLLECTION, "config", SUBCOLLECTIONS.HERRAMIENTAS_EMPRESA, tool.id);
+    batch.set(ref, tool, { merge: true });
+  });
+
+  existingHerramientas.docs.forEach((doc) => {
+    if (!currentToolIds.has(doc.id)) {
+      batch.delete(doc.ref);
+    }
+  });
+
+  // ─── ENTREGAS DE HERRAMIENTAS ────────────────────────────────
+  const currentAssignmentIds = new Set(snapshot.toolAssignments.map((assignment) => assignment.id));
+  const entregasCol = collection(db, TESOCOL_COLLECTION, "config", SUBCOLLECTIONS.ENTREGAS_HERRAMIENTAS);
+  const existingEntregas = await getDocs(entregasCol);
+
+  snapshot.toolAssignments.forEach((assignment) => {
+    const ref = doc(db, TESOCOL_COLLECTION, "config", SUBCOLLECTIONS.ENTREGAS_HERRAMIENTAS, assignment.id);
+    batch.set(ref, assignment, { merge: true });
+  });
+
+  existingEntregas.docs.forEach((doc) => {
+    if (!currentAssignmentIds.has(doc.id)) {
+      batch.delete(doc.ref);
+    }
+  });
+
+  // ─── HERRAMIENTAS DE TECNICOS ────────────────────────────────
+  const currentTechToolIds = new Set(snapshot.technicianTools.map((tool) => tool.id));
+  const herramientasTecnicosCol = collection(db, TESOCOL_COLLECTION, "config", SUBCOLLECTIONS.HERRAMIENTAS_TECNICOS);
+  const existingHerramientasTecnicos = await getDocs(herramientasTecnicosCol);
+
+  snapshot.technicianTools.forEach((tool) => {
+    const ref = doc(db, TESOCOL_COLLECTION, "config", SUBCOLLECTIONS.HERRAMIENTAS_TECNICOS, tool.id);
+    batch.set(ref, tool, { merge: true });
+  });
+
+  existingHerramientasTecnicos.docs.forEach((doc) => {
+    if (!currentTechToolIds.has(doc.id)) {
+      batch.delete(doc.ref);
+    }
   });
 
   await batch.commit();
