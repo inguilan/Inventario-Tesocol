@@ -461,8 +461,8 @@ export default function HerramientasPage() {
                           <td>
                             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                               {tool.estado === "disponible" && <Btn variant="success" size="sm" onClick={() => openAssignTool(tool.id)}><Hammer size={13} /> Prestar</Btn>}
-                              <Btn variant="ghost" size="sm" onClick={() => openEditTool(tool)} title="Editar herramienta"><Pencil size={13} /></Btn>
-                              <Btn variant="danger" size="sm" onClick={() => handleDeleteTool(tool.id)} title="Eliminar herramienta"><Trash2 size={13} /></Btn>
+                              <Btn variant="ghost" size="sm" onClick={() => openEditTool(tool)} title="Editar herramienta"><Pencil size={13} /> Editar</Btn>
+                              <Btn variant="danger" size="sm" onClick={() => handleDeleteTool(tool.id)} title="Eliminar herramienta"><Trash2 size={13} /> Eliminar</Btn>
                             </div>
                           </td>
                         </tr>

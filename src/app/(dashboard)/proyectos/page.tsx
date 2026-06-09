@@ -37,7 +37,7 @@ export default function ProyectosPage() {
   const [projForm, setProjForm]         = useState(emptyProj());
   const [dispRows, setDispRows]         = useState<DispatchRow[]>([emptyDispatchRow()]);
   const [activeDispatchRow, setActiveDispatchRow] = useState(0);
-  const [retForm, setRetForm]           = useState({ itemId:"", qty:0, resp:"", obs:"" });
+  const [retForm, setRetForm]           = useState({ itemId:"", qty:0, resp:"", obs:"", itemQuery:"", itemCategory:"all" });
 
   const materialCategories = Array.from(new Set(inventory.map((i) => i.categoria))).sort((a, b) => a.localeCompare(b, "es"));
 
@@ -125,9 +125,16 @@ export default function ProyectosPage() {
   // ── Return ──
   function saveReturn() {
     if (!retForm.itemId || retForm.qty<=0) { toast("Selecciona material y cantidad","error"); return; }
+    const selectedItem = inventory.find((i)=>i.id===retForm.itemId);
+    if (!selectedItem) { toast("Material inválido","error"); return; }
+    const pendingQty = getPendingReturnQty(retForm.itemId);
+    if (pendingQty <= 0) { toast("No quedan unidades pendientes por devolver","error"); return; }
+    if (retForm.qty > pendingQty) {
+      toast(`Solo quedan ${pendingQty} ${selectedItem.unidad} disponibles para devolver`,`error`);
+      return;
+    }
     try {
-      const item = inventory.find((i)=>i.id===retForm.itemId)!;
-      addReturn({ projectId:selected!, projectNombre:project!.nombre, itemId:retForm.itemId, itemNombre:item.nombre, itemRef:item.ref, unidad:item.unidad, qty:retForm.qty, responsable:retForm.resp, obs:retForm.obs });
+      addReturn({ projectId:selected!, projectNombre:project!.nombre, itemId:retForm.itemId, itemNombre:selectedItem.nombre, itemRef:selectedItem.ref, unidad:selectedItem.unidad, qty:retForm.qty, responsable:retForm.resp, obs:retForm.obs });
       toast("Devolución registrada. Stock actualizado.","success");
       setReturn(false);
     } catch(e:any) { toast(e.message,"error"); }
@@ -135,6 +142,47 @@ export default function ProyectosPage() {
 
   // ── Dispatched items for return select ──
   const dispatchedItems = [...new Map(projDispatches.filter((d)=>d.tipo==="despacho").map((d)=>[d.itemId,{ id:d.itemId, nombre:d.itemNombre }])).values()];
+
+  const dispatchedItemsWithData = dispatchedItems
+    .map((item) => ({
+      ...item,
+      data: inventory.find((inv) => inv.id === item.id),
+    }))
+    .filter((entry) => entry.data);
+
+  const returnCategories = Array.from(
+    new Set(
+      dispatchedItemsWithData
+        .map((entry) => entry.data?.categoria)
+        .filter(Boolean) as string[]
+    )
+  ).sort((a, b) => a.localeCompare(b, "es"));
+
+  function getFilteredReturnItems() {
+    const term = retForm.itemQuery.trim().toLowerCase();
+    return dispatchedItemsWithData
+      .filter((entry) => {
+        const categoryMatch = retForm.itemCategory === "all" || entry.data?.categoria === retForm.itemCategory;
+        if (!categoryMatch) return false;
+        if (!term) return true;
+        const haystack = `${entry.data?.nombre || ""} ${entry.data?.ref || ""} ${entry.data?.categoria || ""}`.toLowerCase();
+        return haystack.includes(term);
+      })
+      .sort((a, b) => {
+        if (!term) return (a.data?.nombre || "").localeCompare(b.data?.nombre || "", "es");
+        return 0;
+      });
+  }
+
+  function getPendingReturnQty(itemId: string) {
+    const dispatchedQty = projDispatches
+      .filter((d) => d.tipo === "despacho" && d.itemId === itemId)
+      .reduce((sum, d) => sum + d.qty, 0);
+    const returnedQty = projDispatches
+      .filter((d) => d.tipo === "devolucion" && d.itemId === itemId)
+      .reduce((sum, d) => sum + d.qty, 0);
+    return Math.max(dispatchedQty - returnedQty, 0);
+  }
 
   // ── Project detail view ──
   if (selected && project) {
@@ -160,7 +208,7 @@ export default function ProyectosPage() {
           <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
             <Btn variant="ghost" size="sm" onClick={()=>generateProjectPDF(project, projDispatches)}><FileText size={14}/> PDF</Btn>
             <Btn variant="orange" size="sm" onClick={()=>{ setDispRows([emptyDispatchRow()]); setActiveDispatchRow(0); setDispatch(true); }}><Truck size={14}/> Despachar</Btn>
-            <Btn variant="success" size="sm" onClick={()=>{ setRetForm({itemId:dispatchedItems[0]?.id||"",qty:0,resp:"",obs:""}); setReturn(true); }}><RotateCcw size={14}/> Devolver</Btn>
+            <Btn variant="success" size="sm" onClick={()=>{ setRetForm({ itemId: dispatchedItems[0]?.id || "", qty:0, resp:"", obs:"", itemQuery:"", itemCategory:"all" }); setReturn(true); }}><RotateCcw size={14}/> Devolver</Btn>
           </div>
         </div>
 
@@ -372,15 +420,121 @@ export default function ProyectosPage() {
           <div style={{ background:"rgba(34,197,94,0.08)", border:"1px solid rgba(34,197,94,0.2)", borderRadius:8, padding:"10px 14px", marginBottom:18, fontSize:13, color:"var(--green)", fontWeight:600 }}>
             📁 {project.nombre}
           </div>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
-            <FormGroup label="Material a Devolver" full>
-              <select value={retForm.itemId} onChange={(e)=>setRetForm({...retForm,itemId:e.target.value})} style={fieldStyle}>
-                {dispatchedItems.map((d)=><option key={d.id} value={d.id}>{d.nombre}</option>)}
-              </select>
-            </FormGroup>
-            <FormGroup label="Cantidad que Regresa"><input type="number" min={1} value={retForm.qty||""} onChange={(e)=>setRetForm({...retForm,qty:+e.target.value})} style={fieldStyle} /></FormGroup>
-            <FormGroup label="Registrado por"><input value={retForm.resp} onChange={(e)=>setRetForm({...retForm,resp:e.target.value})} placeholder="Nombre" style={fieldStyle} /></FormGroup>
-            <FormGroup label="Observaciones" full><textarea value={retForm.obs} onChange={(e)=>setRetForm({...retForm,obs:e.target.value})} placeholder="Estado del material..." style={{ ...fieldStyle, minHeight:72, resize:"vertical" }} /></FormGroup>
+          <div style={{ display:"grid", gap:16 }}>
+            <div style={{ border:"1px solid rgba(34,197,94,0.2)", background:"rgba(34,197,94,0.08)", borderRadius:12, padding:14, display:"grid", gap:12 }}>
+              <div style={{ display:"grid", gridTemplateColumns:"160px 1fr", gap:10 }}>
+                <select
+                  value={retForm.itemCategory}
+                  onChange={(e) => setRetForm({ ...retForm, itemCategory: e.target.value })}
+                  style={{ ...fieldStyle, background:"var(--bg2)", borderRadius:12 }}
+                >
+                  <option value="all">Categorías</option>
+                  {returnCategories.map((cat) => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+                <div style={{ position:"relative" }}>
+                  <Search size={15} style={{ position:"absolute", left:14, top:"50%", transform:"translateY(-50%)", color:"var(--text2)" }} />
+                  <input
+                    value={retForm.itemQuery}
+                    onChange={(e) => setRetForm({ ...retForm, itemQuery: e.target.value })}
+                    placeholder="Escribe el nombre del producto o la referencia"
+                    style={{ ...fieldStyle, paddingLeft:40, background:"var(--bg2)", borderRadius:12, fontSize:14, paddingTop:12, paddingBottom:12 }}
+                  />
+                </div>
+              </div>
+
+              {dispatchedItemsWithData.length === 0 ? (
+                <div style={{ border:"1px dashed var(--border)", borderRadius:12, padding:18, color:"var(--text2)", fontSize:13, textAlign:"center" }}>
+                  No hay materiales despachados para devolver en este proyecto.
+                </div>
+              ) : (
+                <div style={{ border:"1px solid rgba(255,255,255,0.08)", borderRadius:12, background:"rgba(8,8,8,0.24)", padding:12, display:"grid", gap:8, maxHeight:260, overflowY:"auto" }}>
+                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:10, flexWrap:"wrap", fontSize:12, color:"var(--text2)", padding:"2px 4px" }}>
+                    <span>{getFilteredReturnItems().length} resultado{getFilteredReturnItems().length === 1 ? "" : "s"}</span>
+                    <span>Haz clic para agregarlo a la devolución</span>
+                  </div>
+                  <div style={{ display:"grid", gap:8 }}>
+                    {getFilteredReturnItems().length === 0 ? (
+                      <div style={{ border:"1px dashed var(--border)", borderRadius:10, padding:"16px 14px", color:"var(--text2)", fontSize:12, textAlign:"center" }}>
+                        No hay materiales que coincidan con esa búsqueda.
+                      </div>
+                    ) : (
+                      getFilteredReturnItems().map((entry) => {
+                        const item = entry.data!;
+                        const pendingQty = getPendingReturnQty(entry.id);
+                        const active = retForm.itemId === entry.id;
+                        return (
+                          <button
+                            key={entry.id}
+                            type="button"
+                            onClick={() => setRetForm({ ...retForm, itemId: entry.id, itemQuery: item.nombre })}
+                            style={{
+                              background: active ? "linear-gradient(135deg, rgba(34,197,94,0.18), rgba(34,197,94,0.08))" : "var(--bg2)",
+                              border: active ? "1px solid rgba(34,197,94,0.45)" : "1px solid var(--border)",
+                              borderRadius:14,
+                              padding:"12px 14px",
+                              color:"var(--text)",
+                              textAlign:"left",
+                              cursor:"pointer",
+                              display:"grid",
+                              gap:6,
+                              boxShadow: active ? "0 8px 24px rgba(34,197,94,0.10)" : "none",
+                            }}
+                          >
+                            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8 }}>
+                              <strong style={{ fontSize:13 }}>{item.nombre}</strong>
+                              <span style={{ fontSize:11, color: active ? "var(--green)" : "var(--text2)" }}>{pendingQty} {item.unidad} pendientes</span>
+                            </div>
+                            <div style={{ display:"flex", gap:8, flexWrap:"wrap", fontSize:11, color:"var(--text2)" }}>
+                              <span>{item.categoria || "Sin categoría"}</span>
+                              <span>{item.ref || "Sin referencia"}</span>
+                              <span>{item.ubicacion || "Sin ubicación"}</span>
+                            </div>
+                            <div style={{ fontSize:11, color:"var(--text2)", lineHeight:1.4 }}>
+                              {item.desc || "Sin especificaciones registradas"}
+                            </div>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {(() => {
+              const selectedItem = inventory.find((i) => i.id === retForm.itemId);
+              const pendingQty = selectedItem ? getPendingReturnQty(selectedItem.id) : 0;
+              return selectedItem ? (
+                <div style={{ border:"1px solid var(--border)", borderRadius:12, background:"var(--bg2)", padding:14, display:"grid", gap:10 }}>
+                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:10, flexWrap:"wrap" }}>
+                    <strong style={{ fontSize:13, color:"var(--text)" }}>{selectedItem.nombre}</strong>
+                    <span style={{ fontSize:11, color:"var(--green)" }}>Pendientes: {pendingQty} {selectedItem.unidad}</span>
+                  </div>
+                  <div style={{ fontSize:12, color:"var(--text2)", display:"flex", gap:10, flexWrap:"wrap" }}>
+                    <span>Ref: {selectedItem.ref || "—"}</span>
+                    <span>Categoría: {selectedItem.categoria || "—"}</span>
+                    <span>Ubicación: {selectedItem.ubicacion || "—"}</span>
+                  </div>
+                  <div style={{ fontSize:12, color:"var(--text2)", lineHeight:1.45 }}>
+                    <strong style={{ color:"var(--text)" }}>Especificaciones:</strong> {selectedItem.desc || " Sin especificaciones"}
+                  </div>
+                </div>
+              ) : null;
+            })()}
+
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
+              <FormGroup label="Cantidad que Regresa">
+                <input type="number" min={1} value={retForm.qty||""} onChange={(e)=>setRetForm({...retForm,qty:+e.target.value})} style={fieldStyle} />
+              </FormGroup>
+              <FormGroup label="Registrado por">
+                <input value={retForm.resp} onChange={(e)=>setRetForm({...retForm,resp:e.target.value})} placeholder="Nombre" style={fieldStyle} />
+              </FormGroup>
+              <FormGroup label="Observaciones" full>
+                <textarea value={retForm.obs} onChange={(e)=>setRetForm({...retForm,obs:e.target.value})} placeholder="Estado del material..." style={{ ...fieldStyle, minHeight:72, resize:"vertical" }} />
+              </FormGroup>
+            </div>
           </div>
         </Modal>
       </div>
